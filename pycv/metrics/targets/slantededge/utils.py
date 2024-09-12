@@ -1,13 +1,63 @@
 import numpy as np
 from numpy.typing import NDArray
-import scipy.misc
-import math
-import scipy.special
-import scipy.signal
-import decimal
-import sys
-from typing import Union, List
-from .windows import tukey2, ahamming
+from scipy.optimize import curve_fit
+from pycv.utils.windows import tukey2, ahamming
+from pycv.utils.matlab import matlab_conv, matlab_round
+
+
+def get_edge_points_from_centroid(img: NDArray, derivative_filter: NDArray, wflag, alpha = 1.0, npol=5):
+    assert(edge_is_vertical(img))
+    assert(len(img.shape) == 2)
+    height, width = img.shape
+
+    # smoothing window for first part of edge location estimation
+    win1 = get_window(width, (width-1)/2, wflag, alpha)
+
+    # compute initial edge location and fitting
+    lsf = deriv1(img[:, :], derivative_filter)
+
+    edge_y = np.arange(height, dtype=np.float32)
+    edge_x = []
+    edge_x_refined = []
+    for y in range(height):
+        edge_x.append(centroid(lsf[y] * win1) - 0.5)  # subtract 0.5 for FIR filter
+    edge_x = np.array(edge_x)
+    # fit polynomial of the form x = a + b*y + c*y**2 + d*y**3 + ...
+    edge_fit = np.polynomial.polynomial.polyfit(edge_y, edge_x, npol)
+
+    for y in range(height):
+        edge_loc = np.polynomial.polynomial.polyval(y, edge_fit).item()
+        win2 = get_window(width, edge_loc, wflag, alpha)
+        edge_x_refined.append(centroid(lsf[y] * win2) - 0.5)  # subtract 0.5 for FIR filter
+    edge_x_refined = np.array(edge_x_refined)
+    edge_y_refined = edge_y
+    return edge_x_refined, edge_y_refined
+
+
+def get_edge_points_from_fit(img: NDArray):
+    assert(edge_is_vertical(img))
+    assert(len(img.shape) == 2)
+
+    height, width = img.shape
+    edge_y = []
+    edge_x = []
+    x_data = np.arange(width)
+    for y in range(height):
+        f_data = img[y]
+        popt, pcov = curve_fit(fermi_function, x_data, f_data)
+        edge_x.append(popt[-1])
+        edge_y.append(y)
+    return np.array(edge_x), np.array(edge_y)
+
+
+def fermi_function(x, b, d, s, e):
+    """
+    Fermi function, use to fit ESF to
+    :param x:
+    :param params:
+    :return:
+    """
+    return d + (b - d)/(1 + np.exp(-s*(x-e)))
 
 
 def edge_is_vertical(img: NDArray):
@@ -43,6 +93,14 @@ def rotate_image(img: NDArray):
 
 
 def get_window(window_length, midpoint, wflag, alpha: float = 1.0):
+    """
+
+    :param window_length:
+    :param midpoint:
+    :param wflag:
+    :param alpha:
+    :return:
+    """
     if wflag == 0:
         win1 = tukey2(window_length, alpha, midpoint)
         win1 = 0.95*win1 + 0.05
@@ -51,15 +109,17 @@ def get_window(window_length, midpoint, wflag, alpha: float = 1.0):
     return win1
 
 
-def centroid(vec: NDArray) -> float:
+def centroid(vec: NDArray, x: NDArray = None) -> float:
     """
     Calculate the centroid of a vector
 
     :param vec: the vector
+    :param x: coordinates corresponding to each point. If none, arange(vec.shape[0]) will be used
     :return:
     """
     assert(len(vec.shape) == 1)
-    loc = np.sum(np.arange(vec.shape[0])*vec)/np.sum(vec)
+    x = x if x is not None else np.arange(vec.shape[0])
+    loc = np.sum(x*vec)/np.sum(vec)
     return loc
 
 
@@ -89,98 +149,25 @@ def deriv1(data: NDArray, fil: NDArray) -> NDArray:
     return img_deriv
 
 
-def findedge2(x: NDArray, y: NDArray, npol):
+def findedge2(x: NDArray, y: NDArray, npol, mode: str = "f(x)"):
     """
     Fits polynomial equation to the centroids of the edge, of the form
     x = a + b*y + c*y**2 + ...
 
-    :param x: the
+    :param x: the x data
+    :param y: the y data
     :param npol: the order of the polynomial used.
     :return: the polynomial coefficients [a, b, c, d, ...], corresponding to the polynomial
-             a + b*y + c*y**2 + d*y**3 + ...
+             if mode == f(x): a + b*x + c*x**2 + d*x**3 + ...
+             if mode == f(y): a + b*y + c*y**2 + d*y**3 + ...
     """
     assert(len(x.shape) == 1)
     assert(x.shape == y.shape)
-    p = np.polynomial.polynomial.polyfit(y, x, npol)
-    return p
-
-
-def fir2fix(n, m):
-    """
-    Correction for MTF of derivative (difference) filter
-
-    :param n: frequency data length [0-half-sampling (Nyquist) frequency]
-    :param m: length of difference filter, e.g. 2-point difference has m=2, 3-point difference has m=3
-    :return: the correction to apply
-    """
-    m -= 1
-
-    i = np.arange(1, n)
-    correction = np.ones(n)
-    correction[i] = np.abs((np.pi*(i+1)*m/(2*(n+1))) / np.sin(np.pi*(i+1)*m/(2*(n+1))))
-    correction[correction > 10] = 10
-
-    return correction
-
-
-def project2(image, fitme, fac):
-    """
-
-    :param image:
-    :param fitme:
-    :param fac: binning factor
-    :return: binned_data, a (2, x) array where the first row contains the number of elements
-             in the bin, and the second row contains the mean value
-    """
-    assert(len(image.shape) == 2)
-    assert(image.dtype == np.float32)
-    height, width = image.shape
-    slope = 1.0 / fitme[1]
-    nn = math.floor(width*fac)
-    offset = matlab_round(-fac*(height-1)/slope)
-
-    del_ = abs(offset)
-    if offset > 0:
-        offset = 0.0
-
-    bwidth = nn + del_ + 150
-    binned_data = np.zeros((2, bwidth))
-    poly_fn = np.polynomial.Polynomial(fitme)
-
-    p2 = poly_fn(np.arange(height)) - fitme[0]
-
-    n, m = np.meshgrid(np.arange(width), np.arange(height))
-    bin_indices = (np.ceil((n-p2[m])*fac) - offset).astype(np.int32)
-    bin_indices[bin_indices < 0] = 0
-    bin_indices[bin_indices > bwidth - 1] = bwidth - 1
-
-    bin_indices = bin_indices.reshape(-1)
-    np.add.at(binned_data[0], bin_indices, 1)  # binned_data[0, bin_indices] += 1
-    np.add.at(binned_data[1], bin_indices, image.reshape(-1))  # binned_data[1, bin_indices] += image
-
-    start = matlab_round(0.5*del_)
-
-    # checking for bins with no values in them
-    zero_indices = np.arange(start, start + nn)[binned_data[0, np.arange(start, start + nn)] == 0]
-
-    for i in zero_indices:
-        if binned_data[0, i] == 0:
-            if i == 0:
-                binned_data[0, 0] = binned_data[0, 1]
-                binned_data[1, 0] = binned_data[1, 1]
-            if i == start + nn - 1:
-                binned_data[0, start + nn - 1] = binned_data[0, start + nn - 2]
-                binned_data[1, start + nn - 1] = binned_data[1, start + nn - 2]
-            else:
-                binned_data[0, i] = (binned_data[0, i-1] + binned_data[0, i+1])/2
-                binned_data[1, i] = (binned_data[1, i-1] + binned_data[1, i+1])/2
-
-    # calculate mean value of each bin
-    point = np.zeros(nn)
-    indices = np.arange(nn)[binned_data[0, np.arange(nn) + start] > 0]
-    point[indices] = binned_data[1, indices+start]/binned_data[0, indices+start]
-
-    return point
+    assert(mode == "f(x)" or mode == "f(y)")
+    if mode == "f(x)":
+        return np.polynomial.polynomial.polyfit(x, y, npol)
+    else:
+        return np.polynomial.polynomial.polyfit(y, x, npol)
 
 
 def cent(data, center):
@@ -211,104 +198,6 @@ def cent(data, center):
     return centred_data
 
 
-def sampeff(data: NDArray, val: Union[NDArray, List], del_: float, fflag: int = 0, pflag: int = 0):
-    """
-    Calculate the sampling efficiency from the SFR
-
-    :param data: (n, 2), (n, 4), or (n,5) array. First col is frequency
-    :param val: (n, ) vector of SFR frequency values we want the results of
-    :param del_: sampling interval in mm (default = 1 pixel)
-    :param fflag: 0 (default) no filter
-                  1 = filter [1 1 1] applied to sfr
-    :param pflag: 0 (default) no plots
-                  1 plot results
-    :return:
-    """
-    assert(len(data.shape) == 2)
-    assert(data.shape[1] > 1)
-    val = np.asarray(val)
-
-    n, m = data.shape[:2]
-    n_channels = m - 1
-    imax = n - 1
-    nval = val.shape[0]
-    eff = np.zeros((nval, n_channels))
-    freqval = np.zeros((nval, n_channels))
-    sfrval = np.zeros((nval, n_channels))
-
-    hs = 0.495 / del_
-    x = np.where(data[:, 0] > hs)[0]
-    if x.shape[0] == 0:
-        print(" Missing SFR data, frequency up to half-sampling needed")
-
-    for v in range(nval):
-        freqval[v], sfrval[v] = findfreq(data, val[v], imax, fflag)
-        freqval[v] = np.clip(freqval[v], 0.0, hs)
-
-        for c in range(n_channels):
-            eff[v, c] = min(matlab_round(100.0*freqval[v, c]/hs), 100)
-
-    if pflag != 0:
-        # TODO do plotting
-        pass
-
-    return eff, freqval, sfrval
-
-
-def findfreq(data, val, imax, fflag: int = 0):
-    """
-    Find the frequency corresponding to a given SFR value
-
-    :param data: (n, 2), (n, 4), or (n,5) array. First col is frequency
-    :param val: (n, ) vector of SFR frequency values we want the results of
-    :param imax: index of half-sampling frequency (normally n)
-    :param fflag: 1 = filter [1 1 1] applied to sfr
-                  0 (default) no filter
-    :return:
-    """
-    assert(len(data.shape) == 2)
-    n, m = data.shape
-    nc = m - 1
-    sfrval = np.zeros(nc)
-    freqval = np.zeros(nc)
-
-    maxf = data[imax, 0]
-    fil = np.array([1.0, 1.0, 1.0])/3.0
-
-    if fflag != 0:
-        data = np.copy(data)
-
-    for channel in range(nc):
-        if fflag != 0:
-            temp = matlab_conv(data[:, channel + 1], fil)
-            data[1:-1, channel + 1] = temp[1:-1]
-        test = data[:, channel + 1] - val
-        x = np.where(test < 0)[0]
-
-        if x.shape[0] == 0 or x[0] == 0:
-            s = maxf
-            sval = data[imax, channel + 1]
-        else:
-            x = x[0] - 1
-            sval = data[x, channel + 1]
-            s = data[x, 0]
-            y = data[x, channel + 1]
-            y2 = data[x+1, channel + 1]
-
-            slope = (y2 - y) / data[1, 0]
-            dely = test[x]
-            s -= dely / slope
-            sval -= dely
-
-        if s > maxf:
-            s = maxf
-            sval = data[imax, channel + 1]
-
-        freqval[channel] = s
-        sfrval[channel] = sval
-    return freqval, sfrval
-
-
 def get_derivative_filters(img: NDArray):
     """
     Returns the derivative filters used in the sfrmat5 algorithm
@@ -336,37 +225,5 @@ def get_derivative_filters(img: NDArray):
 
     return fil1, fil2
 
-def matlab_round(x):
-    """
-    Round a float to an integer, using the same rounding convention used in matlab
-    (0.5->1.0 instead of 0.5->0.0)
-    :param x:
-    :return:
-    """
-    return int(decimal.Decimal(x).to_integral_value(rounding=decimal.ROUND_HALF_UP))
 
 
-def matlab_conv(data, fil):
-    """
-    Convolves the input data with the specified convolution filter, taking care with
-    padding to ensure the same numerical result is achieved as Matlab's conv(a,b,'same') operation.
-    'data' and 'fil' should have the same number of dimensions. If 'fil' only has a single dimension,
-    it is assumed that it will operate over the last axis.
-
-    :return:
-    """
-
-    if len(data.shape) > len(fil.shape):
-        n_dims_to_add = len(data.shape) - len(fil.shape)
-        fil = np.expand_dims(fil, tuple(range(n_dims_to_add)))
-
-    assert(len(data.shape) == len(fil.shape))
-
-    padding = []
-    for i in range(len(fil.shape)):
-        npad = fil.shape[i] - 1
-        padding.append((npad // 2, npad - npad // 2))
-    data_padded = np.pad(data, padding)
-    conv = scipy.signal.convolve(data_padded, fil, mode='valid')
-
-    return conv
