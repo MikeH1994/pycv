@@ -27,10 +27,13 @@ def run_get_edge_points():
 
             esf, _ = pyesf.create_binned_esf(img, edge_detection_mode="fit")
             lsf = esf.lsf()
+            mtf = lsf.mtf()
 
             esf.plot()
             plt.figure()
             lsf.plot()
+            plt.figure()
+            mtf.plot()
             plt.show()
 
 

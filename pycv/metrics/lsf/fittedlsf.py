@@ -8,23 +8,36 @@ import numpy as np
 
 
 class FittedLSF(LSF):
-    def __init__(self, x_data: NDArray, f_data: NDArray, params: NDArray):
-        super().__init__(x_data, f_data)
-        self.params = params
+    def __init__(self, x_data: NDArray, f_data: NDArray, **kwargs):
+        super().__init__(x_data, f_data, **kwargs)
+        self.params = self.fit(self.x_data, self.f_data, **kwargs)
 
     def f(self, x: Union[NDArray, float]) -> Union[NDArray, float]:
         return self.fn(x, *self.params)
 
+    def get_p0(self):
+        raise Exception("Base function FittedLSF.get_p0() called")
+
+    def get_bounds(self):
+        return [(-np.inf, np.inf) for _ in range(self.get_p0().shape[0])]
+
+    def fit(self, x_data, f_data, **kwargs) -> NDArray:
+        p0 = self.get_p0()
+        bounds = self.get_bounds()
+        try:
+            params, _ = curve_fit(self.fn, x_data, f_data, maxfev=40000, p0=p0, bounds=bounds)
+        except RuntimeError:
+            params = p0
+        return params
+
     @staticmethod
     def fn(x, *params) -> NDArray:
-        raise Exception("Base function FittedESF.fn() called")
+        raise Exception("Base function FittedLSF.fn() called")
 
 
 class GaussianLSF(LSF):
-    def __init__(self,  x_data: NDArray, f_data: NDArray, params: NDArray, **kwargs):
-        super().__init__(x_data, f_data)
-        self.params = params
-        assert(len(params.shape) == 1 and params.shape[0] % 2 == 0)
+    def __init__(self,  x_data: NDArray, f_data: NDArray, **kwargs):
+        super().__init__(x_data, f_data, **kwargs)
 
     @staticmethod
     def fn(x, *args):

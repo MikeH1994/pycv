@@ -17,7 +17,7 @@ class BinnedESF(ESF):
         super().__init__(x_data, f_data, **kwargs)
         self.roi_size = roi_size
         self.bins_per_pixel = bins_per_pixel
-        self.data = bin_data(x_data, f_data, bins_per_pixel, zero_centered)
+        self.data = bin_data(x_data, f_data, bins_per_pixel=bins_per_pixel, zero_centered=zero_centered)
         self.bin_centres = self.data["x"]
         self.bin_values = self.data["val"]
         self.bin_std = self.data["std"]
@@ -28,8 +28,8 @@ class BinnedESF(ESF):
     def f(self, x: Union[NDArray, float]) -> Union[NDArray, float]:
         return self.interpolation_fn(x)
 
-    def lsf(self):
-        return BinnedLSF(self.data)
+    def lsf(self, **kwargs):
+        return BinnedLSF(self.data, **kwargs)
 
     def normalise_data(self):
         raise Exception("Base function ESF.lsf() called")

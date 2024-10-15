@@ -5,15 +5,15 @@ from pycv.utils.matlab import matlab_round, matlab_conv
 import math
 
 
-def bin_data(esf_x: NDArray, esf_f: NDArray, slice_length: int, mode="", **kwargs):
+"""def bin_data(esf_x: NDArray, esf_f: NDArray, slice_length: int, mode="", **kwargs):
     assert(mode == "bin" or mode == "project2")
     if mode == "bin":
         pass
     if mode == "project2":
-        pass
+        pass"""
 
 
-def bin_data(esf_x: NDArray, esf_f: NDArray, slice_length: int, bins_per_pixel: int = 4, zero_centered=True):
+def bin_data(esf_x: NDArray, esf_f: NDArray, bins_per_pixel: int = 4, zero_centered=True):
     """
 
     :param esf_x:

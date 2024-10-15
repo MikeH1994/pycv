@@ -10,11 +10,11 @@ def compute_mtf(lsf_data: NDArray, sampling_interval: float):
     :param sampling_interval:
     :return:
     """
-    assert(len(lsf_data) == 1)
+    assert(len(lsf_data.shape) == 1)
 
     mtf = np.abs(np.fft.rfft(lsf_data))
     mtf /= mtf[0]
-    frequencies = np.fft.fftfreq(lsf_data.shape[0], sampling_interval)
+    frequencies = np.fft.rfftfreq(lsf_data.shape[0], sampling_interval)
 
     returned_data = np.zeros((mtf.shape[0], 2))
     returned_data[:, 0] = frequencies
@@ -42,3 +42,5 @@ def fir2fix(n, m):
     correction[i] = np.abs(omega / np.sin(omega))
     correction[correction > 10] = 10
     return correction
+
+

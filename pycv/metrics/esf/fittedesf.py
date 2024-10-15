@@ -15,17 +15,17 @@ class FittedESF(ESF):
 
     def __init__(self, x_data: NDArray, f_data: NDArray, **kwargs):
         super().__init__(x_data, f_data)
-        self.params = self.fit(x_data, f_data)
+        # self.params = self.fit(x_data, f_data)
+
+    def plot_elem(self, **kwargs):
+        plt.scatter(self.x_data, self.f_data, label="ESF (Measured)")
+        #x_fitted = np.linspace(np.min(self.x_data), np.max(self.x_data), 1000)
+        #f_fitted = self.f(x_fitted)
+        #plt.plot(x_fitted, f_fitted, label="Fitted")
+        plt.plot()
 
     def get_p0(self):
         raise Exception("Base function FittedESF.get_p0() called")
-
-    def plot_elem(self, **kwargs):
-        plt.scatter(self.x_data, self.f_data, label="Measured")
-        x_fitted = np.linspace(np.min(self.x_data), np.max(self.x_data), 1000)
-        f_fitted = self.f(x_fitted)
-        plt.plot(x_fitted, f_fitted, label="Fitted")
-        plt.plot()
 
     def get_bounds(self):
         return [(-np.inf, np.inf) for _ in range(self.get_p0().shape[0])]
@@ -48,15 +48,15 @@ class FittedESF(ESF):
 
 
 class GaussianESF(FittedESF):
-    def __init__(self,  x_data: NDArray, f_data: NDArray, **kwargs):
-        self.n_terms = kwargs["n_terms"] if "n_terms" in kwargs else 4
+    def __init__(self,  x_data: NDArray, f_data: NDArray, n_terms: int = 4, **kwargs):
+        self.n_terms = n_terms
         super().__init__(x_data, f_data)
 
     def get_p0(self):
         return np.ones(self.n_terms*2)
 
-    def lsf(self):
-        return pycv.metrics.lsf.GaussianLSF(self.x_data, self.f_data, self.params)
+    def lsf(self, **kwargs):
+        return pycv.metrics.lsf.GaussianLSF(self.x_data, self.f_data, **kwargs)
 
     @staticmethod
     def fn(x, *args):
@@ -70,11 +70,3 @@ class GaussianESF(FittedESF):
             b_i = args[i*2 + 1]
             f += a_i*erf(x/b_i + c) + d
         return f
-
-    @staticmethod
-    def create_from_slanted_edge(img: NDArray, bins_per_pixel=4, zero_centered=True, **kwargs):
-        data = ESF.create_data_from_slanted_edge(img, **kwargs)
-        x_data, f_data = data["edge_profiles"][0]
-        edge_points = data["edge_points"][0]
-        esf = GaussianESF(x_data, f_data, bins_per_pixel=bins_per_pixel, zero_centered=zero_centered)
-        return esf, edge_points

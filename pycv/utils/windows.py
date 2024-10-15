@@ -1,6 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 import math
+import scipy.interpolate
 
 def ahamming(n, midpoint) -> NDArray:
     """
@@ -22,6 +23,7 @@ def ahamming(n, midpoint) -> NDArray:
     data = 0.54 + 0.46 * data
 
     return data
+
 
 def tukey2(n: int, alpha: float, mid: float):
     """
@@ -77,3 +79,25 @@ def tukey(n, alpha):
     window[n - k - 1] = window[k]
 
     return window
+
+
+def ahamming_fn(width, midpoint=0):
+    halfwidth = width/2.0
+    x0 = - halfwidth
+    x1 = halfwidth
+    x = np.linspace(x0, x1, 5000)
+    y = 0.54 + 0.46 * np.cos(np.pi * x / halfwidth)
+    x = np.array([x0-1, *x, x1+1])
+    y = np.array([y[0], *y, y[-1]])
+    fn = scipy.interpolate.interp1d(x + midpoint, y, fill_value="extrapolate")
+    return fn
+
+
+def tukey_fn(width, alpha, midpoint=0):
+    x = np.arange(width)
+    y = tukey2(width, alpha, (width - 1) / 2.0)
+    x = np.array([x[0] - 1, *x, x[-1] + 1])
+    y = np.array([y[0], *y, y[-1]])
+
+    fn = scipy.interpolate.interp1d(x - (width - 1) / 2.0 + midpoint, y, fill_value="extrapolate")
+    return fn

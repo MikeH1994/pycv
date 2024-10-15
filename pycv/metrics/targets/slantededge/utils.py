@@ -1,4 +1,7 @@
 import numpy as np
+import matplotlib.pyplot as plt
+import scipy.optimize
+import warnings
 from numpy.typing import NDArray
 from scipy.optimize import curve_fit
 from pycv.utils.windows import tukey2, ahamming
@@ -6,6 +9,15 @@ from pycv.utils.matlab import matlab_conv, matlab_round
 
 
 def get_edge_points_from_centroid(img: NDArray, derivative_filter: NDArray, wflag, alpha = 1.0, npol=5):
+    """
+
+    :param img:
+    :param derivative_filter:
+    :param wflag:
+    :param alpha:
+    :param npol:
+    :return:
+    """
     assert(edge_is_vertical(img))
     assert(len(img.shape) == 2)
     height, width = img.shape
@@ -20,7 +32,7 @@ def get_edge_points_from_centroid(img: NDArray, derivative_filter: NDArray, wfla
     edge_x = []
     edge_x_refined = []
     for y in range(height):
-        edge_x.append(centroid(lsf[y] * win1) - 0.5)  # subtract 0.5 for FIR filter
+        edge_x.append(find_centroid_in_row(lsf[y], win1))  # subtract 0.5 for FIR filter
     edge_x = np.array(edge_x)
     # fit polynomial of the form x = a + b*y + c*y**2 + d*y**3 + ...
     edge_fit = np.polynomial.polynomial.polyfit(edge_y, edge_x, npol)
@@ -28,13 +40,18 @@ def get_edge_points_from_centroid(img: NDArray, derivative_filter: NDArray, wfla
     for y in range(height):
         edge_loc = np.polynomial.polynomial.polyval(y, edge_fit).item()
         win2 = get_window(width, edge_loc, wflag, alpha)
-        edge_x_refined.append(centroid(lsf[y] * win2) - 0.5)  # subtract 0.5 for FIR filter
+        edge_x_refined.append(find_centroid_in_row(lsf[y], win2))  # subtract 0.5 for FIR filter
     edge_x_refined = np.array(edge_x_refined)
     edge_y_refined = edge_y
     return edge_x_refined, edge_y_refined
 
 
-def get_edge_points_from_fit(img: NDArray):
+def get_edge_points_from_esf_fit(img: NDArray, wflag, alpha = 1.0):
+    """
+
+    :param img:
+    :return:
+    """
     assert(edge_is_vertical(img))
     assert(len(img.shape) == 2)
 
@@ -42,17 +59,68 @@ def get_edge_points_from_fit(img: NDArray):
     edge_y = []
     edge_x = []
     x_data = np.arange(width)
+    derivative_filter = get_derivative_filters(img, size=2)
+    lsf = deriv1(img[:, :], derivative_filter)
+    win1 = get_window(width, (width-1)/2, wflag, alpha)
+
     for y in range(height):
         f_data = img[y]
-        popt, pcov = curve_fit(fermi_function, x_data, f_data)
-        edge_x.append(popt[-1])
-        edge_y.append(y)
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", scipy.optimize.OptimizeWarning)
+            try:
+                init_guess = find_centroid_in_row(lsf[y], win1)
+                popt, pcov = curve_fit(fermi_function, x_data, f_data, p0=(np.max(f_data), np.min(f_data), 1.0, init_guess))
+                edge_x.append(popt[-1])
+                edge_y.append(y)
+            except scipy.optimize.OptimizeWarning:
+                pass
     return np.array(edge_x), np.array(edge_y)
+
+
+def get_edge_points_from_lsf_fit(img: NDArray, wflag, alpha = 1.0):
+    assert(edge_is_vertical(img))
+    assert(len(img.shape) == 2)
+    height, width = img.shape
+
+    derivative_filter = get_derivative_filters(img, size=2)
+
+    # smoothing window for first part of edge location estimation
+    win1 = get_window(width, (width-1)/2, wflag, alpha)
+    # compute initial edge location and fitting
+    lsf = deriv1(img[:, :], derivative_filter)
+
+    edge_y = np.arange(height, dtype=np.float32)
+    edge_x = []
+
+    x_data = np.arange(width)
+    for y in range(height):
+        # make initial guess using centroid
+        x = find_centroid_in_row(lsf[y], win1)
+        # use this to create a window
+        win2 = get_window(width, x, wflag, alpha)
+        # then fit curve to windowed data
+        popt, pcov = curve_fit(gaussian_function, x_data, lsf[y] * win2, p0=[0.4*np.max(lsf[y]), x, 1])
+
+        edge_x.append(popt[1] - 0.5)
+    edge_x = np.array(edge_x)
+    return edge_x, edge_y
+
+
+def gaussian_function(x, a, mu, sigma):
+    """
+    Gaussian function, used to fit the LSF of a row to find its edge location
+    :param x:
+    :param a:
+    :param mu:
+    :param sigma:
+    :return:
+    """
+    return a * np.exp(-(x - mu) ** 2 / (2. * sigma ** 2))
 
 
 def fermi_function(x, b, d, s, e):
     """
-    Fermi function, use to fit ESF to
+    Fermi function, use to fit the ESF of a row to find its edge location
     :param x:
     :param params:
     :return:
@@ -107,6 +175,16 @@ def get_window(window_length, midpoint, wflag, alpha: float = 1.0):
     else:
         win1 = ahamming(window_length, midpoint)
     return win1
+
+
+def find_centroid_in_row(row, window):
+    """
+
+    :param row:
+    :param window:
+    :return:
+    """
+    return centroid(row * window) - 0.5
 
 
 def centroid(vec: NDArray, x: NDArray = None) -> float:
@@ -198,32 +276,25 @@ def cent(data, center):
     return centred_data
 
 
-def get_derivative_filters(img: NDArray):
+def get_derivative_filters(img: NDArray, size: int):
     """
     Returns the derivative filters used in the sfrmat5 algorithm
 
     :param img:
-    :return: fil1 - 1st derivative filter used for the image
-             fil2 - 1st derivative filter used for the esf
+    :return: fil - the derivative filter requested
     """
-    fil1 = np.array([0.5, -0.5])
-    fil2 = np.array([0.5, 0, -0.5])
-
+    if size == 2:
+        fil = np.array([0.5, -0.5])
+    elif size == 3:
+        fil = np.array([0.5, 0, -0.5])
+    else:
+        raise Exception("Invalid filter size")
+    img = img.reshape((img.shape[0], img.shape[1], -1))
     # we need a positive edge
     t_left = np.sum(np.sum(img[:, :5, 0], axis=1))
-    t_right = np.sum(np.sum(img[:, -6:, 0], axis=1))
+    t_right = np.sum(np.sum(img[:, -5:, 0], axis=1))
 
     if t_left > t_right:
-        fil1 = np.array([-0.5, 0.5])
-        fil2 = np.array([-0.5, 0, 0.5])
+        fil = fil[::-1]
 
-    # test for low contrast edge
-    test = np.abs((t_left - t_right)/(t_left+t_right))
-    if test < 0.2:
-        print(" ** WARNING: Edge contrast is less that 20%, this can\n"
-              "             lead to high error in the SFR measurement.")
-
-    return fil1, fil2
-
-
-
+    return fil
