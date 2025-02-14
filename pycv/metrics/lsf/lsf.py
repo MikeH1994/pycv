@@ -1,3 +1,4 @@
+from __future__ import annotations
 from numpy.typing import NDArray
 from typing import Union
 import matplotlib.pyplot as plt
@@ -18,6 +19,7 @@ class LSF(Metric):
         self.f_data = f_data
         self.default_x_label = "Distance to edge (px)"
         self.default_y_label = "LSF"
+        self.params = None
 
         width = math.ceil(np.max(x_data) - np.min(x_data))
         if wflag == 0:
@@ -37,6 +39,9 @@ class LSF(Metric):
 
     def f(self, x: Union[NDArray, float]) -> Union[NDArray, float]:
         raise Exception("Base function LSF.f() called")
+
+    def esf(self):
+        raise Exception("Base function LSF.lsf() called")
 
     def psf(self):
         raise Exception("Base function LSF.lsf() called")

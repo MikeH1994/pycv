@@ -1,10 +1,11 @@
-from ssecorrection.psf.radialpsf import RadialPSF
+from __future__ import annotations
+from .radialpsf import RadialPSF
 import numpy as np
-from ssecorrection.lsf import GaussianLSF
+import pycv.metrics.lsf as pylsf
 
 
 class GaussianPSF(RadialPSF):
-    def __init__(self, lsf: GaussianLSF, width: int, height: int):
+    def __init__(self, lsf: pylsf.GaussianLSF, width: int, height: int):
         super().__init__(lsf, width, height)
 
     @staticmethod

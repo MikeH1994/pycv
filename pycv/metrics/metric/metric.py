@@ -29,7 +29,7 @@ class Metric:
         if "xlim" in kwargs:
             plt.xlim(kwargs["xlim"])
         if "ylim" in kwargs:
-            plt.ylim(ylim)
+            plt.ylim(kwargs["ylim"])
         if legend:
             plt.legend(loc=0)
         if show:

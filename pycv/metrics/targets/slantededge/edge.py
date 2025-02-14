@@ -14,6 +14,7 @@ class Edge:
         self.edge_x = np.copy(edge_x)
         self.edge_y = np.copy(edge_y)
         self.poly = np.polynomial.polynomial.polyfit(self.edge_x, self.edge_y, 1)
+        self.angle = np.degrees(np.arctan(self.poly[1]))
         self.m = self.poly[1]
         self.is_inf = False
 

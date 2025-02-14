@@ -5,8 +5,10 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 import matplotlib.pyplot as plt
 from ...utils.matlab import matlab_round
 from .lsf import LSF
+from .fittedlsf import GaussianLSF, FittedLSF
 from ..mtf.core import compute_mtf, fir2fix
 from ...metrics.mtf import MTF
+from pycv.utils.settings import FittingParams
 
 
 class BinnedLSF(LSF):
@@ -28,8 +30,14 @@ class BinnedLSF(LSF):
     def f(self, x: Union[NDArray, float]) -> Union[NDArray, float]:
         return self.interpolation_fn(x)
 
+    def fit(self, fitting_mode="gaussian", fitting_params: FittingParams = FittingParams()) -> FittedLSF:
+        if fitting_mode == "gaussian":
+            return GaussianLSF(self.data["x"], self.data["val"], fitting_params=fitting_params)
+        else:
+            raise Exception("Unknown ")
+
     def psf(self):
-        raise Exception("Base function LSF.lsf() called")
+        raise Exception("Base function BinnedLSF.psf() called")
 
     def mtf(self, apply_fir_correction=True):
         # calculate mtf

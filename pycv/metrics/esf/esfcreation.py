@@ -6,6 +6,7 @@ from .fittedesf import GaussianESF
 from .binnedesf import BinnedESF
 from ...metrics.targets.slantededge.core import get_edge_profile_from_image
 from ...metrics.targets.slantededge.edge import Edge
+from pycv.utils.settings import ESFSettings
 
 def create_gaussian_esf(img: NDArray, **kwargs) -> Tuple[GaussianESF, Edge]:
     kwargs["edge_detection_mode"] = kwargs["edge_detection_mode"] if "edge_detection_mode" in kwargs else "fit_esf"
@@ -16,20 +17,17 @@ def create_gaussian_esf(img: NDArray, **kwargs) -> Tuple[GaussianESF, Edge]:
     return esf, edge_points
 
 
-def create_binned_esf(img: NDArray, bins_per_pixel=4, zero_centered=True, **kwargs) -> Tuple[BinnedESF, Edge]:
+def create_binned_esf(img: NDArray, esf_settings: ESFSettings = ESFSettings()) -> Tuple[BinnedESF, Edge]:
     """
 
     :param img:
-    :param bins_per_pixel:
-    :param zero_centered:
-    :param kwargs:
+    :param esf_settings:
     :return:
     """
-    kwargs["edge_detection_mode"] = "fit_esf" if "edge_detection_mode" not in kwargs else kwargs["edge_detection_mode"]
-    data = get_edge_profile_from_image(img, **kwargs)
+    data = get_edge_profile_from_image(img, esf_settings)
     x_data, f_data = data["edge_profiles"][0]
     edge_points = data["edges"][0]
-    esf = BinnedESF(x_data, f_data, bins_per_pixel=bins_per_pixel, zero_centered=zero_centered)
+    esf = BinnedESF(x_data, f_data, esf_settings)
     return esf, edge_points
 
 
