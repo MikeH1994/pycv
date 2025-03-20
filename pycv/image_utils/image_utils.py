@@ -5,6 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 from .colour import get_colour
 
+
 def pad_image(img: NDArray, dst_size: Tuple[int, int]):
     """
 
@@ -121,3 +122,34 @@ def normalise_image(src, dark_img=None, img_min=None, img_max = None):
     dst -= img_min
     dst /= (img_max - img_min)
     return dst
+
+
+def is_rgb(img: NDArray) -> bool:
+    return len(img.shape) == 3 and img.shape[2] == 3 and img.dtype == np.uint8
+
+
+def is_grayscale(img: NDArray) -> bool:
+    return len(img.shape) == 2 and img.dtype == np.uint8
+
+
+def image_is_valid(img: NDArray) -> bool:
+    return is_rgb(img) or is_grayscale(img)
+
+def to_rgb(img: NDArray) -> NDArray:
+    assert(image_is_valid(img)), f"Image is not valid: Shape = {img.shape}, dtype={img.dtype}"
+    if is_rgb(img):
+        return img
+    elif is_grayscale(img):
+        return cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+    else:
+        raise Exception("Logic error")
+
+
+def to_grayscale(img: NDArray) -> NDArray:
+    assert(image_is_valid(img)), f"Image is not valid: Shape = {img.shape}, dtype={img.dtype}"
+    if is_grayscale(img):
+        return img
+    elif is_rgb(img):
+        return cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    else:
+        raise Exception("Logic error")

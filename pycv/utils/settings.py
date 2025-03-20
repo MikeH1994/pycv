@@ -12,6 +12,8 @@ class FittingParams:
     bounds: Union[NDArray, None] = None
     clip_x_range: bool = True
     clip_x_range_k: float = 2.5
+    wflag: int = 2
+    alpha: float = 1
 
 
 @dataclass
@@ -19,7 +21,7 @@ class ESFSettings:
     """
     Settings for creating an ESF.
 
-    Args:
+    Param:
         edge_detection_mode (str): The method used to determine the edge location.
             edge_detection_mode = fit_esf
 
@@ -45,4 +47,3 @@ class ESFSettings:
     edge_location_points: Union[Tuple[float], None] = None
     n_bins_per_pixel: int = 4
     bins_zero_centred: bool = True
-

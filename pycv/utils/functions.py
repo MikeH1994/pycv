@@ -22,4 +22,5 @@ def create_gaussian_kernel(psf_size, sigma_x=1.0, sigma_y=1.0, cx=0.0, cy=0.0, s
             xx, yy = np.meshgrid(x_samples, y_samples)
             f_values = gaussian_2d(xx, yy, sigma_x, sigma_y, cx, cy)
             psf_kernel[y, x] = simps(simps(f_values, x_samples, axis=-1), y_samples)
+    psf_kernel /= np.sum(psf_kernel)
     return psf_kernel
