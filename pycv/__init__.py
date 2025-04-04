@@ -1,9 +1,11 @@
 import pycv.calibration
-import pycv.image_utils
-import pycv.metrics
-import pycv.utils
 import pycv.core
+import pycv.imageutils
+import pycv.metrics
+import pycv.pinholecamera
+import pycv.reconstruction
+import pycv.utils
 
-from .image_utils.image_utils import convert_to_8_bit, is_rgb, is_grayscale, to_rgb, to_grayscale
-from .core import fov_to_focal_length, focal_length_to_fov
+from pycv.core.image_utils import convert_to_8_bit, is_rgb, is_grayscale, to_rgb, to_grayscale, n_channels
+from .pinholecamera import fov_to_focal_length, focal_length_to_fov
 from .constants import *

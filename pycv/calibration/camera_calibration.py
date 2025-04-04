@@ -2,12 +2,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import cv2
 import numpy as np
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Any
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
-
+import pickle
 import pycv
 from pycv.constants import *
+from pycv.pinholecamera import PinholeCamera
 
 
 class CalibrationTarget:
@@ -26,14 +27,16 @@ class CalibrationTarget:
 
 
 class CameraCalibration:
-    device_name: str = ""
     default_calibration_flags: int = cv2.CALIB_FIX_PRINCIPAL_POINT | cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_ASPECT_RATIO
+    device_name: str = ""
     image_size: Union[Tuple[int, int], None] = None
     image_points_per_frame: Union[List[NDArray], None] = None
     object_points_per_frame: Union[List[NDArray], None] = None
     image_keys: Union[List[Union[str, int]], None] = None
     camera_matrix: Union[NDArray, None] = None
     distortion_coeffs: Union[NDArray, None] = None
+    rvecs: Union[List[NDArray]] = None
+    tvecs: Union[List[NDArray]] = None
     rms: float = 0.0
     n_frames: int = 0
     n_frames_failed: int = 0
@@ -42,7 +45,6 @@ class CameraCalibration:
         self.image_points_per_frame: List[NDArray] = []
         self.image_keys: List[Union[str, int]] = []
         self.object_points_per_frame: List[NDArray] = []
-
         self.device_name = device_name
 
     def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None, plot=False, verbose=False):
@@ -76,25 +78,21 @@ class CameraCalibration:
 
     def calibrate(self, alpha: float = None, calibration_flags: int = None, verbose=False):
         calibration_flags = self.default_calibration_flags if calibration_flags is None else calibration_flags
-        self.rms, self.camera_matrix, self.distortion_coeffs, r, t = cv2.calibrateCamera(self.object_points_per_frame,
+        self.rms, self.camera_matrix, self.distortion_coeffs, self.rvecs, self.tvecs = cv2.calibrateCamera(self.object_points_per_frame,
                                                                                          self.image_points_per_frame,
                                                                                          self.image_size, None, None,
                                                                                          flags=calibration_flags)
         if alpha is not None:
-            newcamera_matrix, roi = cv2.getOptimalNewcamera_matrix(self.camera_matrix, self.distortion_coeffs,
-                                                                   self.image_size, alpha)
+            newcamera_matrix, roi = cv2.getOptimalNewCameraMatrix(self.camera_matrix, self.distortion_coeffs,
+                                                                  self.image_size, alpha)
+            print(self.camera_matrix)
+            print("-----------------")
+            print(newcamera_matrix)
+            print(roi)
             self.camera_matrix = newcamera_matrix
 
         if verbose:
-            n = self.n_frames-self.n_frames_failed
-            n_tot = self.n_frames
-            p = self.get_parameters()
-
-            print("    Device {} calibrated with rms = {:.4f}. {}/{} used".format(self.device_name, self.rms, n, n_tot))
-            print("        (w,h)   = ({},{})".format(p["w"], p["h"]))
-            print("        (cx,cy) = ({:.3f},{:.3f})".format(p["cx"], p["cy"]))
-            print("        (fx,fy) = ({:.3f},{:.3f})".format(p["fx"], p["fy"]))
-            print("        (hfov,vfov) = ({:.3f},{:.3f})".format(p["hfov"], p["vfov"]))
+            self.print()
 
         return self.rms
 
@@ -108,9 +106,52 @@ class CameraCalibration:
         fx, fy = m[0, 0], m[1, 1]
         w, h = self.image_size
         hfov, vfov = pycv.focal_length_to_fov(fx, w), pycv.focal_length_to_fov(fy, h)
+        rms = self.rms
         return {
-            "cx": cx, "cy": cy, "fx": fx, "fy": fy, "w": w, "h": h, "hfov": hfov, "vfov": vfov
+            "cx": cx, "cy": cy, "fx": fx, "fy": fy, "w": w, "h": h, "hfov": hfov, "vfov": vfov,
+            "n_images": self.n_frames, "n_images_used": self.n_frames - self.n_frames_failed, "rms":rms,
         }
+
+    def undistort_image(self, img: NDArray):
+        return cv2.undistort(img, self.camera_matrix, self.distortion_coeffs)
+
+    def compute_reprojection_error(self):
+        mean_error = 0
+        for i in range(len(self.object_points_per_frame)):
+            imgpoints2, _ = cv2.projectPoints(self.object_points_per_frame[i], rvecs[i], tvecs[i], self.camera_matrix, self.distortion_coeffs)
+            error = cv2.norm(self.image_points_per_frame[i], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
+            mean_error += error
+        print("total error: {}".format(mean_error / len(objpoints)))
+
+    def print(self, lpad="\t"):
+        p = self.get_parameters()
+        lpad2 = lpad+"\t"
+        print("{}Device '{}' summary:".format(lpad, self.device_name))
+        print("{}images used = {}/{}".format(lpad2, p["n_images"], p["n_images_used"]))
+        print("{}rms         = {:.4f}px".format(lpad2, p["rms"]))
+        print("{}(w,h)       = ({},{})".format(lpad2, p["w"], p["h"]))
+        print("{}(cx,cy)     = ({:.3f},{:.3f})".format(lpad2, p["cx"], p["cy"]))
+        print("{}(fx,fy)     = ({:.3f},{:.3f})".format(lpad2, p["fx"], p["fy"]))
+        print("{}(hfov,vfov) = ({:.3f},{:.3f})".format(lpad2, p["hfov"], p["vfov"]))
+
+    def save(self, fpath: str, verbose=False):
+        with open(fpath, 'wb') as f:
+            pickle.dump(self.__dict__, f)
+            print(f"Device '{self.device_name}' calibration saved to {fpath}")
+
+    def load(self, fpath: str, verbose=False):
+        with open(fpath, "rb") as f:
+            data = pickle.load(f)
+            if data is None:
+                raise Exception("Invalid data loaded")
+            self.__dict__ = data
+        if verbose:
+            print(f"Device '{self.device_name}' calibration loaded from {fpath}")
+            self.print()
+
+    def create_pinhole_camera(self, include_distortion=False) -> PinholeCamera:
+        dist_coeffs = self.distortion_coeffs if include_distortion else np.zeros(5)
+        return PinholeCamera(self.camera_matrix, self.image_size, distortion_coeffs=dist_coeffs)
 
 def create_calibration_target_object_points(board_size: Tuple[int, int], dx: float):
     """
@@ -161,6 +202,3 @@ def add_calibration_point_checkerboard(img, target: CalibrationTarget, create_im
 
     return success, corners, overlayed_image
 
-
-def calibrate(camera_calibration: CameraCalibration):
-    pass

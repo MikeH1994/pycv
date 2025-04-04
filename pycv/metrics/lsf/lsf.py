@@ -48,3 +48,6 @@ class LSF(Metric):
 
     def mtf(self, **kwargs) -> MTF:
         raise Exception("Base function LSF.lsf() called")
+
+    def fwhm(self):
+        raise Exception("Base function LSF.fwhm() called")

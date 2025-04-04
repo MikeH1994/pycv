@@ -9,7 +9,7 @@ from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
 from pycv.utils.settings import FittingParams
-from pycv.utils.maths import calculate_bounds_based_on_fwhm
+from pycv.utils.maths import calculate_fwhm
 
 
 class FittedLSF(LSF):
@@ -36,7 +36,8 @@ class FittedLSF(LSF):
         bounds = self.get_bounds() if fitting_params.bounds is None else fitting_params.bounds
         if fitting_params.clip_x_range:
             if fitting_params.x_range is None:
-                x_range = calculate_bounds_based_on_fwhm(x_data, f_data, fitting_params.clip_x_range_k)
+                cx, fwhm = calculate_fwhm(x_data, f_data)
+                x_range = cx - 2*fwhm, cx + 2*fwhm
                 fitting_params.x_range = x_range if x_range is not None else (np.min(x_data), np.max(x_data))
         x0, x1 = fitting_params.x_range
         f_data = f_data[(x_data >= x0) & (x_data <= x1)]
@@ -53,6 +54,12 @@ class FittedLSF(LSF):
         x_fitted = np.linspace(np.min(self.x_data), np.max(self.x_data), 1000)
         f_fitted = self.f(x_fitted)
         plt.plot(x_fitted, f_fitted, label="LSF (Fitted)")
+
+    def fwhm(self):
+        x_fitted = np.linspace(np.min(self.x_data), np.max(self.x_data), 1000)
+        y_fitted = self.f(x_fitted)
+        _, fwhm = calculate_fwhm(x_fitted, y_fitted)
+        return fwhm
 
     @staticmethod
     def fn(x, *params) -> NDArray:

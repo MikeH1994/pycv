@@ -1,7 +1,7 @@
 from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 from ...metrics.metric import Metric
-
+from pycv.utils.maths import find_intercepts
 
 class MTF(Metric):
     def __init__(self, data: NDArray):
@@ -9,6 +9,9 @@ class MTF(Metric):
         self.default_x_label = "cy/mm"
         self.default_y_label = "MTF"
         self.ifov_scale_factor = 1.0
+
+    def mtf50(self):
+        return find_intercepts(self.data[:, 0], self.data[:, 1], 0.5)[0]
 
     def plot_elem(self, **kwargs):
         mode = kwargs["mode"] if "mode" in kwargs else "cy/px"

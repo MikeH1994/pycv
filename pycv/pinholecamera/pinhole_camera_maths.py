@@ -3,8 +3,8 @@ import numbers
 from typing import Tuple
 from numpy.typing import NDArray
 import scipy.spatial
-from .vector_maths import calc_closest_y_direction, rotation_matrix_to_axes, rotation_matrix_to_axes
-
+from pycv.core.vector_maths import calc_closest_y_direction, rotation_matrix_to_axes, rotation_matrix_to_axes
+import cv2
 
 def focal_length_to_fov(fx: float, xres: float) -> float:
     """
@@ -89,8 +89,14 @@ def get_pixel_point_lies_in(points: NDArray, camera_pos, r, res, fov, centre) ->
     """
     Deproject a point in 3D space on to the 2D image_safe_zone plane, and calculate the coordinates of it
 
-    :param points: a point in 3D space. Shape: (3)
+
+    :param points: the points in 3D space. Any size can be supplied, as
     :type points: np.ndarray
+    :param r:
+    :param centre:
+    :param fov:
+    :param res:
+    :param camera_pos:
     :return: an array of shape (2) containing the x and y coordinates of the 3D point deprojected on to the
         image_safe_zone plane
     :rtype: np.ndarray
@@ -163,3 +169,21 @@ def get_pixel_direction(p: NDArray, r: NDArray, res, fov, centre) -> NDArray:
     # reshape to match input size
     vec = vec.reshape((*init_shape[:-1], 3))
     return vec
+
+
+def find_camera_pose_from_pnp(camera_matrix: NDArray, object_points: NDArray, image_points: NDArray,
+                              distortion_coeffs: NDArray = np.zeros(5)):
+    retval, rvec, tvec = cv2.solvePnP(object_points.astype(np.float64), image_points.astype(np.float64),
+                                      camera_matrix, distortion_coeffs)
+    # to go from rvec and tvec to camera rotation matrix and position in world coordinates, see description in
+    # https://stackoverflow.com/questions/18637494/camera-position-in-world-coordinate-from-cvsolvepnp
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
+    rotation_matrix = np.linalg.inv(rotation_matrix)
+    pos = -np.matmul(rotation_matrix, tvec.reshape(3))
+    return pos, rotation_matrix
+
+def unpack_camera_matrix(camera_matrix: NDArray):
+    fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
+    cx, cy = camera_matrix[0, 2], camera_matrix[1, 2]
+    return fx, fy, cx, cy
+

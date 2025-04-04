@@ -1,7 +1,7 @@
-from scipy.interpolate import InterpolatedUnivariateSpline
+from scipy.interpolate import interp1d, InterpolatedUnivariateSpline
 import numpy as np
 from numpy.typing import NDArray
-
+import scipy.signal
 
 def calculate_fwhm(x: NDArray, y: NDArray):
     """
@@ -10,13 +10,19 @@ def calculate_fwhm(x: NDArray, y: NDArray):
     :param y:
     :return:
     """
-    intercept = (np.max(x) - np.min(x)) / 2.0
-    spline = InterpolatedUnivariateSpline(x, y - intercept)
-    roots = spline.roots()
-    assert(len(roots) > 2 and len(roots) % 2 == 0)
-    x0, x1 = roots[0], roots[-1]
-    cx = (x0 + x1) / 2.0
-    fwhm = np.abs(x1 - x0)
+    # find_peaks and peak_widths give results in terms of indices rather than x pos
+    peak_indices, _ = scipy.signal.find_peaks(y)
+
+    if peak_indices.shape[0] > 1:
+        print("Warning: more than 1 peak found")
+
+    # we only want to take the highest peak, ignore everything else
+    peak_index = [peak_indices[np.argmax(y[peak_indices])]]
+    interp_fn = scipy.interpolate.interp1d(np.arange(x.shape[0]), x)
+    cx = interp_fn(peak_index)
+    roots = find_intercepts(x, y, (np.max(y) - np.min(y)) / 2)
+    fwhm = np.max(roots) - np.min(roots)
+
     return cx, fwhm
 
 
@@ -33,3 +39,9 @@ def calculate_bounds_based_on_fwhm(x: NDArray, y: NDArray, k = 2.5):
     x0 = cx - k*dx
     x1 = cx + k*dx
     return x0, x1
+
+
+def find_intercepts(x, y, threshold):
+    spline = InterpolatedUnivariateSpline(x, y - threshold)
+    roots = spline.roots()
+    return roots
