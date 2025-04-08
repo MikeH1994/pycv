@@ -26,3 +26,11 @@ class PinholeCamera:
 
     def find_camera_pose_from_pnp(self, object_points: NDArray, image_points: NDArray):
         self.p, self.r = find_camera_pose_from_pnp(self.camera_matrix, object_points, image_points, self.distortion_coeffs)
+
+
+
+    def distort_points(self, points: NDArray):
+        pass
+
+    def undistort_points(self, points: NDArray):
+        pass

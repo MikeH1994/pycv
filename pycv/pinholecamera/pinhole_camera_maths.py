@@ -187,3 +187,6 @@ def unpack_camera_matrix(camera_matrix: NDArray):
     cx, cy = camera_matrix[0, 2], camera_matrix[1, 2]
     return fx, fy, cx, cy
 
+def create_inverse_map(undistortion_map):
+    # https://stackoverflow.com/questions/66895102/how-to-apply-distortion-on-an-image-using-opencv-or-any-other-library
+    pass
