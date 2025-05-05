@@ -7,7 +7,7 @@ import scipy.interpolate
 class InterpolatedImage:
     def __init__(self, img: NDArray):
         self.img = img
-        height, width = np.shape[:2]
+        height, width = img.shape[:2]
         x = np.arange(width)
         y = np.arange(height)
         self.interp_fn = scipy.interpolate.RectBivariateSpline(y, x, self.img)
@@ -20,7 +20,7 @@ class InterpolatedImage:
         :param return_as_int:
         :return:
         """
-        ret = self.interp_fn(x, y, grid=False)
+        ret = self.interp_fn(y, x, grid=False)
 
         if return_as_int:
             if isinstance(ret, np.ndarray):

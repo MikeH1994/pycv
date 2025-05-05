@@ -3,8 +3,9 @@ import numbers
 from typing import Tuple
 from numpy.typing import NDArray
 import scipy.spatial
-from pycv.core.vector_maths import calc_closest_y_direction, rotation_matrix_to_axes, rotation_matrix_to_axes
+from pycv.core.vector_maths import calc_closest_y_direction
 import cv2
+from pycv.core import stack_coords
 
 def focal_length_to_fov(fx: float, xres: float) -> float:
     """
@@ -109,7 +110,7 @@ def get_pixel_point_lies_in(points: NDArray, camera_pos, r, res, fov, centre) ->
     cx, cy = centre
 
     init_shape = points.shape
-    points = points.reshape(-1, 3)
+    points = points.reshape((-1, 3))
 
     # calculate the direction vector from the camera to the defined points
     direction_vector = (points - camera_pos)
@@ -132,7 +133,7 @@ def get_pixel_point_lies_in(points: NDArray, camera_pos, r, res, fov, centre) ->
 
     return result
 
-def get_pixel_direction(p: NDArray, r: NDArray, res, fov, centre) -> NDArray:
+def get_pixel_direction(p, r: NDArray, res, fov, centre) -> NDArray:
     """
     Get the direction vector corresponding to the given pixel coordinates
 
@@ -142,6 +143,9 @@ def get_pixel_direction(p: NDArray, r: NDArray, res, fov, centre) -> NDArray:
     :rtype: np.ndarray
     """
 
+    if isinstance(p, tuple):
+        p = stack_coords(p)
+
     cx, cy = centre
     hfov, vfov = fov
     xres, yres = res
@@ -149,9 +153,9 @@ def get_pixel_direction(p: NDArray, r: NDArray, res, fov, centre) -> NDArray:
     init_shape = p.shape
     p = p.reshape(-1, 2)
     n = p.shape[0]
-
     u = p[:, 0]
     v = p[:, 1]
+
 
     # calculate the direction vector of the rays in local coordinates
     vz = 1
@@ -181,6 +185,67 @@ def find_camera_pose_from_pnp(camera_matrix: NDArray, object_points: NDArray, im
     rotation_matrix = np.linalg.inv(rotation_matrix)
     pos = -np.matmul(rotation_matrix, tvec.reshape(3))
     return pos, rotation_matrix
+
+def rotation_matrix_to_axes(r: NDArray) -> Tuple[NDArray, NDArray, NDArray]:
+    """
+    Given a 3x3 rotation matrix that defines the transformation from the camera's coordinate frame (where it square_points
+        in the direction (0, 0, 1)), to the world's coordinate frame. Returns a tuple of numpy arrays,
+        corresponding to the x, y and z axes in the world coordinate frame.
+
+    :param r: the 3x3 rotation matrix
+    :type r: np.ndarray
+    :return: (x_axis, up, z_axis) -
+    :rtype: np.ndarray
+    """
+    # create a direction vector for each axis, then transform using the rotation matrix
+    x_axis = np.matmul(r, np.array([1, 0, 0]))
+    y_axis = np.matmul(r, np.array([0, 1, 0]))
+    z_axis = np.matmul(r, np.array([0, 0, 1]))
+    return x_axis, y_axis, z_axis
+
+
+def lookpos_to_rotation_matrix(pos: NDArray, look_pos: NDArray, y_axis: NDArray):
+    """
+    Creates a 3x3 rotation matrix from lookpos
+
+    :param pos: the position of the camera in world coordinates. Shape (3)
+    :type pos: np.ndarray
+    :param look_pos: a points in world coordinates the camera is looking at. Shape (3)
+    :rtype lookpos: np.ndarray
+    :param y_axis: the world direction vector corresponding to the y axis ('up') in the camera's frame of reference.
+        Shape (3)
+    :type y_axis: np.ndarray
+    :return: the created 3x3 rotation matrix
+    :rtype: NDArray
+    """
+    r = np.zeros((3, 3))
+    # the z axis in the camera's local coordinates defines the plane going out from the optical centre of the
+    # camera to a points where the camera is looking at
+    z_prime = (look_pos - pos) / np.linalg.norm(look_pos - pos)
+    # calculate the y axis closest to the one specified
+    y_prime = calc_closest_y_direction(z_prime, y_axis)
+    y_prime /= np.linalg.norm(y_prime)
+    # the x axis is then calculated as the cross product between the y and z axes
+    x_prime = np.cross(y_prime, z_prime)
+    x_prime /= np.linalg.norm(x_prime)
+    # the rotation matrix can then be constructed by the the axes
+    r[:, 0] = x_prime
+    r[:, 1] = y_prime
+    r[:, 2] = z_prime
+    return r
+
+
+def rotation_matrix_to_lookpos(pos: NDArray, r: NDArray):
+    """
+
+    :param pos:
+    :param r:
+    :return:
+    """
+    look_dir = np.matmul(r, np.array([0, 0, 1]))
+    lookpos = pos + look_dir
+    return lookpos
+
 
 def unpack_camera_matrix(camera_matrix: NDArray):
     fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
