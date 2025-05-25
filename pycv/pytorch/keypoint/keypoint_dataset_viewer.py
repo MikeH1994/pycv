@@ -1,6 +1,6 @@
 from ..base.base_dataset_viewer import BaseDatasetViewer
 from ..utils import overlay_points_on_image
-import mytorch.core as core
+import pycv.pytorch.core as core
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt

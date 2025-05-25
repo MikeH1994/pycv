@@ -90,9 +90,6 @@ class KeypointRCNNDataset(BaseDataset):
             "iscrowd": shape: (n_bboxes, ), dtype: bool
         }
 
-
-
-
         :param idx:
         :return:
         """

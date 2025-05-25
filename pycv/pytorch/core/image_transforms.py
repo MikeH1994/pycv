@@ -42,7 +42,7 @@ def get_image_transforms(image_params: ImageTransformParams, normalize: bool = T
                 fit_output = image_params.affine_fit_output
                 t += [alb.Affine(translate_percent=tx, scale=scale, p=image_params.p_affine,
                                  rotate=rotate, mode=cv2.BORDER_CONSTANT, fit_output=fit_output,
-                                 shear=shear, keep_ratio=image_params.affine_keep_aspect_ratio)]
+                                 shear=shear)] # , keep_ratio=image_params.affine_keep_aspect_ratio
 
             if image_params.p_random_crop > 0:
                 t += [alb.RandomCrop(width=image_params.image_width, height=image_params.image_height,

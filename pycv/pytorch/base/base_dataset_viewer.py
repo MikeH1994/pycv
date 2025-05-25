@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
-from mytorch.base import BaseDataset
-from mytorch.core import Configuration
+from pycv.pytorch.base import BaseDataset
+from pycv.pytorch.core import Configuration
 from typing import Tuple
 
 

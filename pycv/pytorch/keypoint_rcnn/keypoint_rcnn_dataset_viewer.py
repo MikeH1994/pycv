@@ -1,5 +1,5 @@
 from ..base.base_dataset_viewer import BaseDatasetViewer
-import mytorch.core as core
+import pycv.pytorch.core as core
 from .utils import overlay_points_on_image
 import numpy as np
 import cv2

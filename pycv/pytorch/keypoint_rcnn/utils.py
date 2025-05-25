@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from numpy.typing import NDArray
 from typing import List, Tuple, Union, Dict
-import mytorch.core as core
+import pycv.pytorch.core as core
 import torchvision.ops.boxes as bops
 import albumentations as alb
 from albumentations.augmentations.crops.transforms import Crop
