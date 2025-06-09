@@ -4,7 +4,6 @@ from ...utils.functions import gaussian_2d
 from typing import Tuple
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
-from scipy.integrate import simps
 
 
 def kernel_to_interpolation_fn(kernel, n_samples=100):

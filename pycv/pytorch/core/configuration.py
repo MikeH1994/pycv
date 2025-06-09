@@ -25,16 +25,11 @@ class ImageTransformParams(BaseParams):
     image_height: Union[int, None] = None
     mean: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     std: Tuple[float, float, float] = (1.0, 1.0, 1.0)
-
     always_clahe: bool = False
+
     p_hor_flip: float = 0.0
     p_vert_flip: float = 0.0
-    p_clahe: float = 0.0
     p_random_crop: float = 0.0
-
-    p_rbc: float = 0.0
-    rbc_contrast_brightness_limit: float = 0.15
-    rbc_contrast_limit: float = 0.15
 
     """
     Affine transforms
@@ -55,6 +50,23 @@ class ImageTransformParams(BaseParams):
     p_sharpen: float = 0.0
     sharpen_alpha_min: float = 0.2
     sharpen_alpha_max: float = 0.5
+
+    p_rbc: float = 0.0
+    rbc_contrast_brightness_limit: float = 0.15
+    rbc_contrast_limit: float = 0.15
+
+    p_clahe: float = 0.0
+
+    p_blur: float = 0.0
+    blur_limit: Tuple[int, int] = (3, 7)
+    blur_sigma_x_limit: Tuple[float, float] = (0.2, 1)
+    blur_sigma_y_limit: Tuple[float, float] = (0.2, 1)
+    blur_rotate_limit: Tuple[int, int] = (-90, 90)
+    blur_beta_limit: Tuple[float, float] = (0.5, 8)
+    blur_noise_limit: Tuple[float, float] = (0.9, 1.1)
+
+    p_channel_dropout: float = 0.0
+
 
 
 @dataclass

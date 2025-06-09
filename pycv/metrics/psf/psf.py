@@ -4,7 +4,7 @@ from typing import Union
 import matplotlib.pyplot as plt
 import numpy as np
 import math
-from scipy.integrate import simps
+from scipy.integrate import simpson
 import scipy.interpolate
 from scipy.interpolate import RectBivariateSpline
 from ...metrics.metric import Metric
@@ -31,7 +31,7 @@ class PSF(Metric):
                 y_samples = np.linspace(y0, y1, sqrt_n_samples)
                 xx, yy = np.meshgrid(x_samples, y_samples)
                 f_values = self.interp_fn(yy, xx, grid=False)
-                psf_kernel[y, x] = simps(simps(f_values, x_samples, axis=-1), y_samples)
+                psf_kernel[y, x] = simpson(simpson(f_values, x_samples, axis=-1), y_samples)
 
         psf_kernel /= np.sum(psf_kernel)
         return psf_kernel

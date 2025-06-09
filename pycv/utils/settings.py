@@ -15,6 +15,23 @@ class FittingParams:
     wflag: int = 2
     alpha: float = 1
 
+@dataclass
+class PlotSettings:
+    """
+
+    """
+    title: str = ""
+    xlabel : str = ""
+    ylabel: str = ""
+
+    xlim: Tuple[int, int] | None = None
+    ylim: Tuple[int, int] | None = None
+    title_fontsize: int = 20
+    axis_fontsize: int = 18
+    tick_fontsize: int = 18
+    legend_fontsize: int = 16
+
+
 
 @dataclass
 class ESFSettings:
@@ -47,3 +64,6 @@ class ESFSettings:
     edge_location_points: Union[Tuple[float], None] = None
     n_bins_per_pixel: int = 4
     bins_zero_centred: bool = True
+    normalise_x: bool = False
+    normalise_y: bool = False
+

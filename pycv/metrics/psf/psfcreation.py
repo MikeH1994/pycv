@@ -3,7 +3,7 @@ from ...utils.functions import gaussian_2d
 from typing import Tuple
 import numpy as np
 from scipy.interpolate import RectBivariateSpline
-from scipy.integrate import simps
+from scipy.integrate import simpson
 
 
 def create_gaussian_psf(psf_size: Tuple[int, int], sigma_x=1.0, sigma_y=1.0, cx=0.0, cy=0.0, n_samples=100) -> PSF:

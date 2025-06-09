@@ -31,10 +31,9 @@ def create_binned_esf(img: NDArray, esf_settings: ESFSettings = ESFSettings()) -
     return esf, edge_points
 
 
-def create_generic_esf(img: NDArray, **kwargs) -> Tuple[ESF, Edge]:
-    kwargs["edge_detection_mode"] = kwargs["edge_detection_mode"] if "edge_detection_mode" in kwargs else "fit_esf"
-    data = get_edge_profile_from_image(img, **kwargs)
+def create_generic_esf(img: NDArray, esf_settings: ESFSettings = ESFSettings()) -> Tuple[ESF, Edge]:
+    data = get_edge_profile_from_image(img, esf_settings.edge_detection_mode)
     x_data, f_data = data["edge_profiles"][0]
     edge_points = data["edges"][0]
-    esf = ESF(x_data, f_data)
+    esf = ESF(x_data, f_data, esf_settings)
     return esf, edge_points

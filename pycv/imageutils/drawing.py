@@ -16,7 +16,7 @@ def overlay_points_on_image(img: NDArray, points: List[Tuple], radius=1, color=(
 
 
 def draw_text(img, text, font=cv2.FONT_HERSHEY_PLAIN, pos=(0, 0), font_scale=3, font_thickness=2,
-              text_color=(255, 255, 255), text_color_bg=(0, 0, 0), center=True, boundary=6, halign="left", valign="top"):
+              text_color=(255, 255, 255), text_color_bg=(0, 0, 0), boundary=6, halign="left", valign="top"):
     assert(halign == "left" or halign == "right" or halign == "center")
     assert(valign == "top" or valign == "bottom" or valign == "center")
 

@@ -1,25 +1,9 @@
 from __future__ import annotations
-
 import numpy as np
 from numpy.typing import NDArray
 from typing import Tuple
 import cv2
-from optree import treespec_namedtuple
 
-def scale_transform(sx, sy):
-    pass
-
-def translation_transform(tx, ty):
-    pass
-
-def pad_transform(pl, pr, pt, pb):
-    pass
-
-def crop_transform(crop_roi):
-    pass
-
-def pad_affine_matrix(src_mat):
-    pass
 
 def invert_affine_matrix(m):
     assert m.shape == (2, 3), "Affine matrix must be 2x3"

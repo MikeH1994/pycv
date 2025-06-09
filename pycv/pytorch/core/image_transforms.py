@@ -22,17 +22,17 @@ def get_image_transforms(image_params: ImageTransformParams, normalize: bool = T
                 t += [alb.VerticalFlip(p=image_params.p_vert_flip)]
 
             p_clahe = image_params.p_clahe if image_params.always_clahe is False else 0.0
-            alpha_min = image_params.sharpen_alpha_min
-            alpha_max = image_params.sharpen_alpha_max
-
             if image_params.p_sharpen > 0.0:
-                t += [alb.Sharpen(alpha=(alpha_min, alpha_max), lightness=(1.0, 1.0), p=image_params.p_sharpen)]
+                t += [alb.Sharpen(alpha=(image_params.sharpen_alpha_min, image_params.sharpen_alpha_max), lightness=(1.0, 1.0), p=image_params.p_sharpen)]
             if p_clahe > 0.0:
                 t += [alb.CLAHE(p=image_params.p_clahe)]
             if image_params.p_rbc > 0.0:
                 t += [alb.RandomBrightnessContrast(brightness_limit=image_params.rbc_contrast_limit,
                                                    contrast_limit=image_params.rbc_contrast_limit,
                                                    p=image_params.p_rbc)]
+            if image_params.p_channel_dropout > 0.0:
+                t += [alb.ChannelDropout(p=image_params.p_channel_dropout)]
+
             if image_params.p_affine > 0.0:
                 tx = image_params.affine_transl
                 sx = image_params.affine_scale
@@ -44,9 +44,11 @@ def get_image_transforms(image_params: ImageTransformParams, normalize: bool = T
                                  rotate=rotate, mode=cv2.BORDER_CONSTANT, fit_output=fit_output,
                                  shear=shear)] # , keep_ratio=image_params.affine_keep_aspect_ratio
 
-            if image_params.p_random_crop > 0:
+            if image_params.p_random_crop > 0.0:
                 t += [alb.RandomCrop(width=image_params.image_width, height=image_params.image_height,
                                      p=image_params.p_random_crop)]
+            if image_params.p_blur > 0.0:
+                t += [alb.augmentations.Blur(blur_limit=image_params.blur_limit, p=image_params.p_blur)]
         if image_params.image_width is not None and image_params.image_height is not None:
             t += [alb.Resize(width=image_params.image_width, height=image_params.image_height)]
 

@@ -49,7 +49,7 @@ class BaseDatasetViewer:
 
             cv2.imshow(title, image)
             cv2.namedWindow(title, cv2.WINDOW_NORMAL)
-            cv2.resizeWindow(title, image.shape[1], image.shape[0])
+            cv2.resizeWindow(title, 640, 640)
             key_pressed = cv2.waitKeyEx(0)
 
             if key_pressed == 119:  # w

@@ -1,16 +1,12 @@
 from numpy.typing import NDArray
 import numpy as np
 import scipy.integrate
+from scipy.integrate import simpson
+from scipy.optimize import curve_fit
 from pycv.utils.matlab import matlab_round, matlab_conv
 import math
+from pycv.metrics.targets.slantededge.utils import fermi_function
 
-
-"""def bin_data(esf_x: NDArray, esf_f: NDArray, slice_length: int, mode="", **kwargs):
-    assert(mode == "bin" or mode == "project2")
-    if mode == "bin":
-        pass
-    if mode == "project2":
-        pass"""
 
 
 def bin_data(esf_x: NDArray, esf_f: NDArray, bins_per_pixel: int = 4, zero_centered=True):
@@ -18,7 +14,6 @@ def bin_data(esf_x: NDArray, esf_f: NDArray, bins_per_pixel: int = 4, zero_cente
 
     :param esf_x:
     :param esf_f:
-    :param slice_length: the width of the ROI (if computing row by row)
     :param bins_per_pixel:
     :param zero_centered:
     :return:
@@ -84,6 +79,12 @@ def bin_data(esf_x: NDArray, esf_f: NDArray, bins_per_pixel: int = 4, zero_cente
         "bins_per_pixel": bins_per_pixel
     }
 
+def normalise_esf_x(x_data, f_data):
+    init_guess = 0.0
+    popt, pcov = curve_fit(fermi_function, x_data, f_data, p0=(np.max(f_data), np.min(f_data), 1.0, init_guess))
+    x_pos = popt[-1]
+    x_data -= x_pos
+    return x_data, f_data
 
 def normalise_esf_data(x_data, esf_data):
     if np.mean(esf_data[x_data < 0]) > np.mean(esf_data[x_data > 0]):
@@ -94,7 +95,7 @@ def normalise_esf_data(x_data, esf_data):
     esf_data = esf_data[sorted_indices]
     lsf_data = np.gradient(esf_data, x_data)
 
-    integral = scipy.integrate.simpson(lsf_data, x=x_data)
+    integral = simpson(lsf_data, x=x_data)
     scale_factor = 1.0 / integral
     # x_offset = - centroid(esf_data, x_data)
 

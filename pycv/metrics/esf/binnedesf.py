@@ -14,8 +14,8 @@ from pycv.utils.settings import ESFSettings
 
 
 class BinnedESF(ESF):
-    def __init__(self, x_data: NDArray, f_data: NDArray, esf_settings: ESFSettings = ESFSettings(), **kwargs):
-        super().__init__(x_data, f_data, **kwargs)
+    def __init__(self, x_data: NDArray, f_data: NDArray, esf_settings: ESFSettings = ESFSettings()):
+        super().__init__(x_data, f_data, esf_settings)
         self.bins_per_pixel = esf_settings.n_bins_per_pixel
         self.data = bin_data(x_data, f_data, self.bins_per_pixel, zero_centered=esf_settings.bins_zero_centred)
         self.bin_centres = self.data["x"]
