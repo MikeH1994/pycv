@@ -2,7 +2,7 @@ from __future__ import annotations
 import numpy as np
 from typing import Tuple
 from numpy.typing import NDArray
-
+import os
 
 def stack_coords(arrays: Tuple[NDArray]) -> NDArray:
     assert(len(arrays) == 2 or len(arrays) == 3)
@@ -32,3 +32,10 @@ def unstack_coords(array: NDArray) -> Tuple:
     array = array.reshape(-1, n_stacks)
     arrays = [array[:, i].reshape(stack_shape) for i in range(n_stacks)]
     return tuple(arrays)
+
+
+def get_subfolders(root, full_path=True):
+    subfolders = [os.path.join(root, f) for f in os.listdir(root) if os.path.isdir(os.path.join(root, f))]
+    if not full_path:
+        subfolders = [os.path.basename(f) for f in subfolders]
+    return subfolders

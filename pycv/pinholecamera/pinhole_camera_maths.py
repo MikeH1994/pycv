@@ -86,7 +86,7 @@ def create_camera_matrix(cx: float, cy: float, fx: float, fy: float = None):
     return camera_matrix
 
 
-def get_pixel_point_lies_in(points: NDArray, camera_pos, r, res, fov, centre) -> NDArray:
+def project_points_to_2d(points: NDArray, camera_pos, r, res, fov, centre) -> NDArray:
     """
     Deproject a point in 3D space on to the 2D image_safe_zone plane, and calculate the coordinates of it
 
@@ -255,3 +255,20 @@ def unpack_camera_matrix(camera_matrix: NDArray):
 def create_inverse_map(undistortion_map):
     # https://stackoverflow.com/questions/66895102/how-to-apply-distortion-on-an-image-using-opencv-or-any-other-library
     pass
+
+def distort_points(x, y, camera_matrix, distortion_coeffs):
+    fx = camera_matrix[0][0]
+    fy = camera_matrix[1][1]
+    cx = camera_matrix[0][2]
+    cy = camera_matrix[1][2]
+    k1, k2, p1, p2, k3 = distortion_coeffs.reshape(-1)
+
+    x = (x - cx) / fx
+    y = (y - cy) / fy
+    r = np.sqrt(x**2 + y**2)
+
+    x_dist = x * (1 + k1*r**2 + k2*r**4 + k3*r**6) + (2 * p1 * x * y + p2 * (r**2 + 2 * x * x))
+    y_dist = y * (1 + k1*r**2 + k2*r**4 + k3*r**6) + (p1 * (r**2 + 2 * y * y) + 2 * p2 * x * y)
+    x_dist = x_dist * fx + cx
+    y_dist = y_dist * fy + cy
+    return x_dist.astype(np.float32), y_dist.astype(np.float32)

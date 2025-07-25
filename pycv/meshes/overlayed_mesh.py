@@ -40,7 +40,7 @@ class OverlayedMesh:
             vertices_visible = self.points_are_unoccluded(vertices, camera)
 
             interpolated_image = pycv.imageutils.InterpolatedImage(image)
-            px_coords = camera.get_pixel_point_lies_in(vertices)
+            px_coords = camera.project_points_to_2d(vertices)
             x, y = px_coords[:, 0], px_coords[:, 1]
             valid_indices = (x >= 0) & (x <= width - 1) & (y >= 0) & (y <= height - 1) & vertices_visible
             valid_vertex_vals = interpolated_image.f(x[valid_indices], y[valid_indices])
@@ -89,7 +89,7 @@ class OverlayedMesh:
 
     def create_mask(self, camera: PinholeCamera):
         mask = np.zeros((camera.yres, camera.xres), dtype=np.uint8)
-        coords = camera.get_pixel_point_lies_in(np.asarray(self.mesh.vertices), return_as_int=True)
+        coords = camera.project_points_to_2d(np.asarray(self.mesh.vertices), return_as_int=True)
         u, v = unstack_coords(coords)
         valid_indices = (v >= 0) & (v < camera.yres - 1) & (u >= 0) & (u < camera.xres - 1)
         mask[v[valid_indices]][u[valid_indices]] = 1

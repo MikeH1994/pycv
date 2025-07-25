@@ -27,7 +27,7 @@ class CalibrationTarget:
 
 
 class CameraCalibration:
-    default_calibration_flags: int = cv2.CALIB_FIX_PRINCIPAL_POINT | cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_ASPECT_RATIO
+    default_calibration_flags: int = cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_TANGENT_DIST
     device_name: str = ""
     image_size: Union[Tuple[int, int], None] = None
     image_points_per_frame: Union[List[NDArray], None] = None
@@ -133,10 +133,12 @@ class CameraCalibration:
         print("{}(cx,cy)     = ({:.3f},{:.3f})".format(lpad2, p["cx"], p["cy"]))
         print("{}(fx,fy)     = ({:.3f},{:.3f})".format(lpad2, p["fx"], p["fy"]))
         print("{}(hfov,vfov) = ({:.3f},{:.3f})".format(lpad2, p["hfov"], p["vfov"]))
+        print("{} {}".format(lpad2, self.distortion_coeffs))
 
     def save(self, fpath: str, verbose=False):
         with open(fpath, 'wb') as f:
             pickle.dump(self.__dict__, f)
+        if verbose:
             print(f"Device '{self.device_name}' calibration saved to {fpath}")
 
     def load(self, fpath: str, verbose=False):
@@ -149,7 +151,7 @@ class CameraCalibration:
             print(f"Device '{self.device_name}' calibration loaded from {fpath}")
             self.print()
 
-    def create_pinhole_camera(self, include_distortion=False) -> PinholeCamera:
+    def create_pinhole_camera(self, include_distortion=True) -> PinholeCamera:
         dist_coeffs = self.distortion_coeffs if include_distortion else np.zeros(5)
         return PinholeCamera(self.camera_matrix, self.image_size, distortion_coeffs=dist_coeffs)
 
@@ -191,9 +193,10 @@ def add_calibration_point_circle_grid(img, calib_target: CalibrationTarget, use_
 
 
 def add_calibration_point_checkerboard(img, target: CalibrationTarget, create_image: bool = True):
-    success, corners = cv2.findChessboardCorners(img, target.board_size)
-    if success is True:
-        corners = cv2.cornerSubPix(img, corners, target.board_size, (-1, -1))
+    success, corners = cv2.findChessboardCornersSB(img, target.board_size, flags=cv2.CALIB_CB_EXHAUSTIVE)
+
+    #if success is True:
+    #    corners = cv2.cornerSubPix(img, corners, target.board_size, (-1, -1))
 
     overlayed_image = None
     if success and create_image:

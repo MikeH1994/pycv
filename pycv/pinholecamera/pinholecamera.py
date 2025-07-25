@@ -1,9 +1,11 @@
 import numpy as np
 from numpy.typing import NDArray
 from typing import Union, Tuple
-from .pinhole_camera_maths import get_pixel_direction, get_pixel_point_lies_in, find_camera_pose_from_pnp, rotation_matrix_to_axes
+from .pinhole_camera_maths import get_pixel_direction, project_points_to_2d, find_camera_pose_from_pnp, rotation_matrix_to_axes, distort_points
 from .pinhole_camera_maths import focal_length_to_fov, unpack_camera_matrix, rotation_matrix_to_lookpos, lookpos_to_rotation_matrix
 import cv2
+
+from ..core import unstack_coords
 
 
 class PinholeCamera:
@@ -18,11 +20,11 @@ class PinholeCamera:
     def get_pixel_direction(self, x, y) -> NDArray:
         return get_pixel_direction((x, y), self.r, (self.xres, self.yres), (self.hfov(), self.vfov()), (self.cx(), self.cy()))
 
-    def get_pixel_point_lies_in(self, points: NDArray, return_as_int=False):
+    def project_points_to_2d(self, points: NDArray, return_as_int=False):
         fx, fy, cx, cy = unpack_camera_matrix(self.camera_matrix)
 
         hfov, vfov = focal_length_to_fov(fx, self.xres), focal_length_to_fov(fy, self.yres)
-        points = get_pixel_point_lies_in(points, self.p, self.r, (self.xres, self.yres), (hfov, vfov), (cx, cy))
+        points = project_points_to_2d(points, self.p, self.r, (self.xres, self.yres), (hfov, vfov), (cx, cy))
         if return_as_int:
             points = points.astype(np.int32)
         return points
@@ -31,10 +33,11 @@ class PinholeCamera:
         self.p, self.r = find_camera_pose_from_pnp(self.camera_matrix, object_points, image_points, self.distortion_coeffs)
 
     def distort_points(self, points: NDArray):
-        pass
+        x, y = unstack_coords(points)
+        return distort_points(x, y, self.camera_matrix, self.distortion_coeffs)
 
     def undistort_points(self, points: NDArray):
-        pass
+        return cv2.undistortPoints(points, self.camera_matrix, self.distortion_coeffs)
 
     def set_lookpos(self, lookpos, y = None):
         if y is None:
@@ -100,3 +103,10 @@ class PinholeCamera:
         dst[:3, :3] = self.r
         dst[3, :3] = self.p
         return dst
+
+    def pixel_size(self, distance, using_fov=True):
+        if using_fov:
+            hfov = self.hfov()
+            return distance*np.tan(np.radians(hfov/2))/(self.xres/2)
+        else:
+            return distance / self.fx()
