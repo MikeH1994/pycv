@@ -112,3 +112,7 @@ class ImageTransformation:
 
         m =  np.array([[scale, 0, tx], [0, scale, ty]], dtype=np.float32)
         return ImageTransformation(m, src_size=src_size, dst_size=dst_size)
+
+    @staticmethod
+    def affine_warp(src_points, dst_points, src_size, dst_size):
+        pass

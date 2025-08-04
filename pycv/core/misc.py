@@ -3,6 +3,7 @@ import numpy as np
 from typing import Tuple
 from numpy.typing import NDArray
 import os
+import glob
 
 def stack_coords(arrays: Tuple[NDArray]) -> NDArray:
     assert(len(arrays) == 2 or len(arrays) == 3)
@@ -39,3 +40,9 @@ def get_subfolders(root, full_path=True):
     if not full_path:
         subfolders = [os.path.basename(f) for f in subfolders]
     return subfolders
+
+def get_all_files_in_folder(folderpath, extension, recursive=False):
+    if recursive:
+        return sorted(glob.glob(os.path.join(folderpath, "**/*{}".format(extension)), recursive=True))
+    else:
+        return sorted(glob.glob(os.path.join(folderpath, "*{}".format(extension)), recursive=False))
