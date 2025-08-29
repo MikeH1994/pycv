@@ -105,21 +105,21 @@ def create_distortion_coeffs(k1, k2, k3, p1, p2, k4=0.0, k5=0.0, k6=0.0, mode="s
     else:
         return np.array([k1, k2, p1, p2, k3], dtype=np.float32)
 
-def project_points_to_2d(points: NDArray, camera_pos, r, camera_matrix) -> NDArray:
+def project_points_to_2d(points: NDArray, camera_pos, camera_rotation, camera_matrix) -> NDArray:
     """
     Deproject a point in 3D space on to the 2D image_safe_zone plane, and calculate the coordinates of it
 
 
-    :param points: the points in 3D space. Any size can be supplied, as
+    :param points: the points in 3D space. Any size can be supplied, as long as the last dimension has 3 channels
     :type points: np.ndarray
-    :param r:
+    :param camera_rotation:
     :param camera_matrix
     :param camera_pos:
     :return: an array of shape (2) containing the x and y coordinates of the 3D point deprojected on to the
         image_safe_zone plane
     :rtype: np.ndarray
     """
-    x_axis, y_axis, z_axis = rotation_matrix_to_axes(r)
+    x_axis, y_axis, z_axis = rotation_matrix_to_axes(camera_rotation)
     fx, fy, cx, cy = camera_matrix
 
 
@@ -319,7 +319,7 @@ def undistort_points(distorted_points, camera_matrix, distortion_coeffs):
     """
     # convert points to (N, 1, 2)
     init_shape = distorted_points.shape
-    distorted_points = distorted_points.reshape((-1, 1, 2))
+    distorted_points = distorted_points.reshape((-1, 2)).astype(np.float64)
     undistorted_points = cv2.undistortPoints(distorted_points, camera_matrix, distortion_coeffs, P=camera_matrix)
     undistorted_points = undistorted_points.reshape(init_shape)
     return undistorted_points

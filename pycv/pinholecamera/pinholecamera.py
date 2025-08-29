@@ -25,32 +25,45 @@ class PinholeCamera:
         self.p = np.copy(p)
         self.r = np.copy(r)
 
-    def deproject_to_3d_vector(self, points, apply_distortion=True, normalise=True) -> NDArray:
-        if apply_distortion:
-            points = self.distort_points(points)
+    def deproject_to_3d_vector(self, points: np.ndarray, apply_undistortion=True, normalise=True) -> NDArray:
+        """
+
+        :param points: locations of points in the image. Shape: (..., 2)
+        :param apply_undistortion: if the points represent the location in the distorted image, they must be undistorted first
+        :param normalise: normalise so that the magnitude of the vector is 1
+        :return:
+        """
+        if apply_undistortion:
+            points = self.undistort_points(points)
         return deproject_to_3d_vector(points, self.r, self.camera_matrix, normalise=normalise)
 
-    def project_points_to_2d(self, points: NDArray, return_as_int=False):
-        fx, fy, cx, cy = unpack_camera_matrix(self.camera_matrix)
+    def project_points_to_2d(self, points: NDArray, return_distorted=True, return_as_int=False):
+        """
 
-        hfov, vfov = focal_length_to_fov(fx, self.xres), focal_length_to_fov(fy, self.yres)
+        :param points: the 3D world coordinates. Shape (..., 3)
+        :param return_distorted: distort the projected coordinates before returning
+        :param return_as_int: return as integers
+        :return:
+        """
         points = project_points_to_2d(points, self.p, self.r, self.camera_matrix)
+        if return_distorted:
+            points = self.distort_points(points)
         if return_as_int:
             points = points.astype(np.int32)
         return points
 
     def distort_points(self, points: NDArray):
         """
-
-        :param points:
+        Applies distortion to a set of image points.
+        :param points: Shape: (..., 2)
         :return:
         """
         return distort_points(points, self.camera_matrix, self.distortion_coeffs)
 
     def undistort_points(self, points: NDArray):
         """
-
-        :param points:
+        Applies undistortion to a set of image points.
+        :param points: Shape: (..., 2)
         :return:
         """
         return undistort_points(points, self.camera_matrix, self.distortion_coeffs)
@@ -67,7 +80,7 @@ class PinholeCamera:
         self.r = lookpos_to_rotation_matrix(self.p, lookpos, y)
 
 
-    def generate_rays(self, apply_distortion=True, direction_only=False, normalise=True) -> NDArray:
+    def generate_rays(self, apply_undistortion=True, direction_only=False, normalise=True) -> NDArray:
         """
         Generate a set of rays for each pixel in Open3D's format for use in the Open3D raycasting. Each Open3D ray is
             a vector of length 6, where the first 3 elements correspond to the origin of the ray (the camera position),
@@ -82,7 +95,7 @@ class PinholeCamera:
         pixel_coords[:, :, 1] = yy
 
         init_shape = pixel_coords.shape
-        pixel_direction = self.deproject_to_3d_vector(pixel_coords, apply_distortion=apply_distortion, normalise=normalise)
+        pixel_direction = self.deproject_to_3d_vector(pixel_coords, apply_undistortion=apply_undistortion, normalise=normalise)
 
         if direction_only:
             rays = pixel_direction.reshape((*init_shape[:-1], 3))
