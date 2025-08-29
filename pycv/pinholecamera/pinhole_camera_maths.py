@@ -86,7 +86,26 @@ def create_camera_matrix(cx: float, cy: float, fx: float, fy: float = None):
     return camera_matrix
 
 
-def project_points_to_2d(points: NDArray, camera_pos, r, res, fov, centre) -> NDArray:
+def create_distortion_coeffs(k1, k2, k3, p1, p2, k4=0.0, k5=0.0, k6=0.0, mode="standard"):
+    """
+
+    :param k1:
+    :param k2:
+    :param k3:
+    :param p1:
+    :param p2:
+    :param k4:
+    :param k5:
+    :param k6:
+    :param mode:
+    :return:
+    """
+    if k4 != 0.0 or k5 != 0.0 or k6 != 0.0:
+        return np.array([k1, k2, p1, p2, k3, k4, k5, k6], dtype=np.float32)
+    else:
+        return np.array([k1, k2, p1, p2, k3], dtype=np.float32)
+
+def project_points_to_2d(points: NDArray, camera_pos, r, camera_matrix) -> NDArray:
     """
     Deproject a point in 3D space on to the 2D image_safe_zone plane, and calculate the coordinates of it
 
@@ -94,81 +113,75 @@ def project_points_to_2d(points: NDArray, camera_pos, r, res, fov, centre) -> ND
     :param points: the points in 3D space. Any size can be supplied, as
     :type points: np.ndarray
     :param r:
-    :param centre:
-    :param fov:
-    :param res:
+    :param camera_matrix
     :param camera_pos:
     :return: an array of shape (2) containing the x and y coordinates of the 3D point deprojected on to the
         image_safe_zone plane
     :rtype: np.ndarray
     """
     x_axis, y_axis, z_axis = rotation_matrix_to_axes(r)
-    xres, yres = res
-    hfov, vfov = fov
-    hfov = np.radians(hfov)
-    vfov = np.radians(vfov)
-    cx, cy = centre
+    fx, fy, cx, cy = camera_matrix
+
 
     init_shape = points.shape
     points = points.reshape((-1, 3))
 
     # calculate the direction vector from the camera to the defined points
     direction_vector = (points - camera_pos)
+
     # convert this vector to local coordinate space by doing dot product of
     # direction vector and each axis
     x_prime = np.sum(direction_vector*x_axis, axis=-1)
     y_prime = np.sum(direction_vector*y_axis, axis=-1)
     z_prime = np.sum(direction_vector*z_axis, axis=-1)
+
     # deproject on to image plane
-    k_x = 2 * z_prime * np.tan(hfov / 2.0)
-    k_y = 2 * z_prime * np.tan(vfov / 2.0)
-    u = (x_prime / k_x * xres + cx)
-    v = (y_prime / k_y * yres + cy)
-    #
+    u = x_prime / z_prime * fx + cx
+    v = y_prime / z_prime * fy + cy
+
+    # stack into numpy array
     result = np.zeros((x_prime.shape[0], 2))
     result[:, 0] = u
     result[:, 1] = v
+
     # returned shape is the same as initial shape, but final dimension is 2 instead of 3
     result = result.reshape((*init_shape[:-1], 2))
 
     return result
 
-def get_pixel_direction(p, r: NDArray, res, fov, centre) -> NDArray:
-    """
-    Get the direction vector corresponding to the given pixel coordinates
-
-    :param p: the pixel coordinates
-    :return: an array of length 3, which corresponds to the direction vector in world space for the given
-             pixel coordinates
-    :rtype: np.ndarray
+def deproject_to_3d_vector(points, r: NDArray, camera_matrix, normalise=True) -> NDArray:
     """
 
-    if isinstance(p, tuple):
-        p = stack_coords(p)
+    :param points:
+    :param r:
+    :param camera_matrix:
+    :param normalise:
+    :return:
+    """
 
-    cx, cy = centre
-    hfov, vfov = fov
-    xres, yres = res
+    if isinstance(points, tuple):
+        points = stack_coords(points)
 
-    init_shape = p.shape
-    p = p.reshape(-1, 2)
-    n = p.shape[0]
-    u = p[:, 0]
-    v = p[:, 1]
+    fx, fy, cx, cy = unpack_camera_matrix(camera_matrix)
 
+    init_shape = points.shape
+    points = points.reshape(-1, 2)
+    n = points.shape[0]
+    u = points[:, 0]
+    v = points[:, 1]
 
     # calculate the direction vector of the rays in local coordinates
-    vz = 1
 
     vec = np.zeros((n, 3))
-    vec[:, 0] = 2.0 * vz * (u - cx) / xres * np.tan(np.radians(hfov / 2.0))
-    vec[:, 1] = 2.0 * vz * (v - cy) / yres * np.tan(np.radians(vfov / 2.0))
-    vec[:, 2] = vz
+    vec[:, 0] = (u - cx) / fx
+    vec[:, 1] = (v - cy) / fy
+    vec[:, 2] = 1.0
 
     # calculate the direction vector in world coordinates
     r = scipy.spatial.transform.Rotation.from_matrix(r)
     vec = r.apply(vec)
-    vec /= np.linalg.norm(vec, axis=-1).reshape(-1, 1)
+    if normalise:
+        vec /= np.linalg.norm(vec, axis=-1).reshape(-1, 1)
 
     # reshape to match input size
     vec = vec.reshape((*init_shape[:-1], 3))
@@ -256,19 +269,57 @@ def create_inverse_map(undistortion_map):
     # https://stackoverflow.com/questions/66895102/how-to-apply-distortion-on-an-image-using-opencv-or-any-other-library
     pass
 
-def distort_points(x, y, camera_matrix, distortion_coeffs):
+def distort_points(points, camera_matrix, distortion_coeffs):
+    assert(len(distortion_coeffs) == 5 or len(distortion_coeffs) == 8)
+    init_shape = points.shape
+    points = points.reshape((-1, 2))
+    points_distorted = np.zeros(points.shape, dtype=np.float64)
+
     fx = camera_matrix[0][0]
     fy = camera_matrix[1][1]
     cx = camera_matrix[0][2]
     cy = camera_matrix[1][2]
-    k1, k2, p1, p2, k3 = distortion_coeffs.reshape(-1)
 
-    x = (x - cx) / fx
-    y = (y - cy) / fy
-    r = np.sqrt(x**2 + y**2)
+    if len(distortion_coeffs) == 5:
+        k1, k2, p1, p2, k3 = distortion_coeffs.reshape(-1)
+        k4 = k5 = k6 = 0
+    else:
+        k1, k2, p1, p2, k3, k4, k5, k6 = distortion_coeffs.reshape(-1)
 
-    x_dist = x * (1 + k1*r**2 + k2*r**4 + k3*r**6) + (2 * p1 * x * y + p2 * (r**2 + 2 * x * x))
-    y_dist = y * (1 + k1*r**2 + k2*r**4 + k3*r**6) + (p1 * (r**2 + 2 * y * y) + 2 * p2 * x * y)
-    x_dist = x_dist * fx + cx
-    y_dist = y_dist * fy + cy
-    return x_dist.astype(np.float32), y_dist.astype(np.float32)
+    x = (points[:, 0] - cx) / fx
+    y = (points[:, 1] - cy) / fy
+    r2 = x**2 + y**2
+    r4 = r2**2
+    r6 = r2**3
+
+    # Compute radial distortion
+    radial = (1 + k1 * r2 + k2 * r4 + k3 * r6) / (1 + k4 * r2 + k5 * r4 + k6 * r6)
+
+    # Compute tangential distortion
+    x_tangential = 2 * p1 * x * y + p2 * (r2 + 2 * x ** 2)
+    y_tangential = p1 * (r2 + 2 * y ** 2) + 2 * p2 * x * y
+
+    x_distorted = x * radial + x_tangential
+    y_distorted = y * radial + y_tangential
+
+    points_distorted[:, 0] = x_distorted * fx + cx
+    points_distorted[:, 1] = y_distorted * fy + cy
+    points_distorted = points_distorted.reshape(init_shape)
+
+    return points_distorted
+
+
+def undistort_points(distorted_points, camera_matrix, distortion_coeffs):
+    """
+
+    :param camera_matrix:
+    :param distortion_coeffs:
+    :param distorted_points:
+    :return:
+    """
+    # convert points to (N, 1, 2)
+    init_shape = distorted_points.shape
+    distorted_points = distorted_points.reshape((-1, 1, 2))
+    undistorted_points = cv2.undistortPoints(distorted_points, camera_matrix, distortion_coeffs, P=camera_matrix)
+    undistorted_points = undistorted_points.reshape(init_shape)
+    return undistorted_points

@@ -1,2 +1,2 @@
-from .pinhole_camera_maths import focal_length_to_fov, fov_to_focal_length, create_camera_matrix
+from .pinhole_camera_maths import focal_length_to_fov, fov_to_focal_length, create_camera_matrix, create_distortion_coeffs
 from .pinholecamera import PinholeCamera

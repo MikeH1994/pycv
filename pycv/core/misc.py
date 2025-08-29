@@ -5,25 +5,13 @@ from numpy.typing import NDArray
 import os
 import glob
 
-def stack_coords(arrays: Tuple[NDArray]) -> NDArray:
-    assert(len(arrays) == 2 or len(arrays) == 3)
+def stack_coords(arrays: Tuple[np.ndarray, ...]) -> NDArray:
     assert(isinstance(arrays, tuple))
     if isinstance(arrays[0], int) or isinstance(arrays[0], float):
         return np.array(arrays)
     assert(all([arr.shape == arrays[0].shape for arr in arrays]))
     assert(all([arr.dtype == arrays[0].dtype for arr in arrays]))
-
-    n_arr = len(arrays)
-    n_elems = np.prod(arrays[0].shape)
-    init_shape = arrays[0].shape
-    dtype = arrays[0].dtype
-    dst_shape = (*init_shape, n_arr)
-    dst_arr = np.zeros((n_elems, n_arr), dtype=dtype)
-
-    for i in range(n_arr):
-        dst_arr[:, i] = arrays[i].reshape(-1)
-    dst_arr.reshape(dst_shape)
-    return dst_arr
+    return np.stack(arrays, axis=-1)
 
 
 def unstack_coords(array: NDArray) -> Tuple:
@@ -46,3 +34,26 @@ def get_all_files_in_folder(folderpath, extension, recursive=False):
         return sorted(glob.glob(os.path.join(folderpath, "**/*{}".format(extension)), recursive=True))
     else:
         return sorted(glob.glob(os.path.join(folderpath, "*{}".format(extension)), recursive=False))
+
+
+def get_all_folders_containing_filetype(root_dir, extension, recursive=True):
+    folders_with_files = []
+    files_in_folders = []
+
+    root_depth = root_dir.rstrip(os.sep).count(os.sep)
+    max_depth = 1 if not recursive else None
+    for current_dir, dirs, files in os.walk(root_dir):
+        current_depth = current_dir.count(os.sep) - root_depth
+        if max_depth is not None and current_depth > max_depth:
+            # Prevent descending further by clearing dirs
+            dirs[:] = []
+            continue
+
+        pattern = os.path.join(current_dir, f"*{extension}")
+        matched_files = glob.glob(pattern)
+
+        if matched_files:
+            folders_with_files.append(current_dir)
+            files_in_folders.append(matched_files)
+
+    return folders_with_files, files_in_folders

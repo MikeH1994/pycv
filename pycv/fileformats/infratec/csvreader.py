@@ -155,17 +155,19 @@ class IRBISFolder:
         return self.datasets[index]
 
     @staticmethod
-    def load(folderpath, extension=".csv", recursive=False, show_progress_bar=False, units=None, clip_dataset=None):
+    def load(folderpath, extension=None, recursive=False, show_progress_bar=False, units=None, max_files_in_folder=None):
         results = {}
-        fpaths = pycv.get_all_files_in_folder(folderpath, extension, recursive=recursive)
-        if clip_dataset is not None:
-            fpaths = fpaths[:clip_dataset]
-        loader = tqdm(fpaths, disable = not show_progress_bar)
-        for fpath in loader:
-            img = IRBISCSVImage.load(fpath)
-            if img.key() not in results:
-                results[img.key()] = []
-            results[img.key()].append(img)
+        folders, files_in_folders = pycv.get_all_folders_containing_filetype(folderpath, extension)
+        loader = tqdm(folders, disable = not show_progress_bar)
+        for i, folder in enumerate(loader):
+            files_in_folder = files_in_folders[i]
+            if max_files_in_folder is not None:
+                files_in_folder = files_in_folder[: max_files_in_folder]
+            for fpath in files_in_folder:
+                img = IRBISCSVImage.load(fpath)
+                if img.key() not in results:
+                    results[img.key()] = []
+                results[img.key()].append(img)
 
         for key in results.keys():
             results[key] = IRBISCSVImage.collate(results[key])

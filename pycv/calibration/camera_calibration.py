@@ -32,6 +32,7 @@ class CameraCalibration:
     image_size: Union[Tuple[int, int], None] = None
     image_points_per_frame: Union[List[NDArray], None] = None
     object_points_per_frame: Union[List[NDArray], None] = None
+    residual_errors_per_frame: Union[List[NDArray], None] = None
     image_keys: Union[List[Union[str, int]], None] = None
     camera_matrix: Union[NDArray, None] = None
     distortion_coeffs: Union[NDArray, None] = None
@@ -40,6 +41,7 @@ class CameraCalibration:
     rms: float = 0.0
     n_frames: int = 0
     n_frames_failed: int = 0
+    parameter_errors = {}
 
     def __init__(self, device_name="device"):
         self.image_points_per_frame: List[NDArray] = []
@@ -112,16 +114,22 @@ class CameraCalibration:
             "n_images": self.n_frames, "n_images_used": self.n_frames - self.n_frames_failed, "rms":rms,
         }
 
+    def get_parameter_errors(self, param, return_type_if_missing=0.0):
+        if param in self.parameter_errors:
+            return param
+        else:
+            return return_type_if_missing
+
     def undistort_image(self, img: NDArray):
         return cv2.undistort(img, self.camera_matrix, self.distortion_coeffs)
 
     def compute_reprojection_error(self):
         mean_error = 0
-        for i in range(len(self.object_points_per_frame)):
+        """for i in range(len(self.object_points_per_frame)):
             imgpoints2, _ = cv2.projectPoints(self.object_points_per_frame[i], rvecs[i], tvecs[i], self.camera_matrix, self.distortion_coeffs)
             error = cv2.norm(self.image_points_per_frame[i], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
             mean_error += error
-        print("total error: {}".format(mean_error / len(objpoints)))
+        print("total error: {}".format(mean_error / len(objpoints)))"""
 
     def print(self, lpad="\t"):
         p = self.get_parameters()
