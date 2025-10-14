@@ -58,8 +58,9 @@ class IRBISMetadata:
         metadata: Dict[str, Any] = {key: None for key in IRBISMetadata.fields}
         with open(fpath) as f:
             header_length = 0
-            for line in f:
-                if "[Data]" in line:
+            while True:
+                line = f.readline().strip()
+                if not line or "[Data]" in line:
                     break
                 header_length += 1
                 if line == "":
