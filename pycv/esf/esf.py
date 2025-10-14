@@ -3,8 +3,8 @@ from numpy.typing import NDArray
 from typing import Union
 import matplotlib.pyplot as plt
 from .utils import normalise_esf_x
-from ...metrics.lsf.lsf import LSF
-from ...metrics.mtf import MTF
+from pycv.lsf.lsf import LSF
+from pycv.metrics.mtf import MTF
 from pycv.metrics.metric import Metric
 from pycv.utils.settings import ESFSettings
 

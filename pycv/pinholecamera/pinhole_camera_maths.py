@@ -265,6 +265,25 @@ def unpack_camera_matrix(camera_matrix: NDArray):
     cx, cy = camera_matrix[0, 2], camera_matrix[1, 2]
     return fx, fy, cx, cy
 
+def distortion_coefficients_to_dict(distortion_coefficients):
+    if len(distortion_coefficients) == 5:
+        k1, k2, p1, p2, k3 = distortion_coefficients
+        k4 = k5 = k6 = 0.0
+    elif len(distortion_coefficients) == 8:
+        k1, k2, p1, p2, k3, k4, k5, k6 = distortion_coefficients
+    else:
+        raise Exception("Unknown distortion coefficient type")
+    return {
+        "k1": k1,
+        "k2": k2,
+        "k3": k3,
+        "k4": k4,
+        "k5": k5,
+        "k6": k6,
+        "p1": p1,
+        "p2": p2
+    }
+
 def create_inverse_map(undistortion_map):
     # https://stackoverflow.com/questions/66895102/how-to-apply-distortion-on-an-image-using-opencv-or-any-other-library
     pass

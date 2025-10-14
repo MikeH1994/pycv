@@ -1,5 +1,5 @@
 from .psf import PSF
-from ...utils.functions import gaussian_2d
+from pycv.utils.functions import gaussian_2d
 from typing import Tuple
 import numpy as np
 from scipy.interpolate import RectBivariateSpline

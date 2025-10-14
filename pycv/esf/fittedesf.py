@@ -1,5 +1,4 @@
 from __future__ import annotations
-from dataclasses import dataclass
 from .esf import ESF
 from scipy.optimize import curve_fit
 from scipy.special import erf
@@ -7,8 +6,7 @@ from numpy.typing import NDArray
 from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
-import pycv.metrics.lsf
-from pycv.metrics.mtf import MTF
+import pycv.lsf
 from pycv.utils.settings import FittingParams
 from pycv.utils.maths import calculate_bounds_based_on_fwhm
 

@@ -4,8 +4,8 @@ from typing import Tuple, List
 from .esf import ESF
 from .fittedesf import GaussianESF
 from .binnedesf import BinnedESF
-from ...metrics.targets.slantededge.core import get_edge_profile_from_image
-from ...metrics.targets.slantededge.edge import Edge
+from pycv.metrics.targets.slantededge.core import get_edge_profile_from_image
+from pycv.metrics.targets.slantededge.edge import Edge
 from pycv.utils.settings import ESFSettings
 
 def create_gaussian_esf(img: NDArray, **kwargs) -> Tuple[GaussianESF, Edge]:

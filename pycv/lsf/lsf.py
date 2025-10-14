@@ -5,9 +5,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import math
 from scipy.integrate import simpson
-from ...metrics.mtf import MTF
-from ...metrics.metric import Metric
-from ...utils.windows import tukey_fn, ahamming_fn
+from pycv.metrics.mtf import MTF
+from pycv.metrics.metric import Metric
+from pycv.utils.windows import tukey_fn, ahamming_fn
 
 
 class LSF(Metric):

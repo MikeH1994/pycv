@@ -1,1 +1,1 @@
-from .core import save_current_fig, set_labels_and_legend
+from .core import save_current_fig, set_labels_and_legend, set_colorbar

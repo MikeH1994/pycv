@@ -9,6 +9,7 @@ import pickle
 import pycv
 from pycv.constants import *
 from pycv.pinholecamera import PinholeCamera
+from pycv.pinholecamera import unpack_camera_matrix, distortion_coefficients_to_dict
 
 
 class CalibrationTarget:
@@ -103,16 +104,17 @@ class CameraCalibration:
 
     def get_parameters(self):
         assert(self.camera_matrix is not None)
-        m = self.camera_matrix
-        cx, cy = m[0, 2], m[1, 2]
-        fx, fy = m[0, 0], m[1, 1]
+        fx, fy, cx, cy = unpack_camera_matrix(self.camera_matrix)
+
         w, h = self.image_size
         hfov, vfov = pycv.focal_length_to_fov(fx, w), pycv.focal_length_to_fov(fy, h)
         rms = self.rms
-        return {
+        ret = {
             "cx": cx, "cy": cy, "fx": fx, "fy": fy, "w": w, "h": h, "hfov": hfov, "vfov": vfov,
             "n_images": self.n_frames, "n_images_used": self.n_frames - self.n_frames_failed, "rms":rms,
         }
+        ret.update(distortion_coefficients_to_dict(self.distortion_coeffs))
+        return ret
 
     def get_parameter_errors(self, param, return_type_if_missing=0.0):
         if param in self.parameter_errors:
@@ -203,8 +205,8 @@ def add_calibration_point_circle_grid(img, calib_target: CalibrationTarget, use_
 def add_calibration_point_checkerboard(img, target: CalibrationTarget, create_image: bool = True):
     success, corners = cv2.findChessboardCornersSB(img, target.board_size, flags=cv2.CALIB_CB_EXHAUSTIVE)
 
-    #if success is True:
-    #    corners = cv2.cornerSubPix(img, corners, target.board_size, (-1, -1))
+    if success is True:
+        corners = cv2.cornerSubPix(img, corners, target.board_size, (-1, -1))
 
     overlayed_image = None
     if success and create_image:

@@ -2,8 +2,7 @@ import os
 import cv2
 import matplotlib.pyplot as plt
 import pycv.metrics.targets.slantededge.core
-from pycv.metrics.targets.slantededge.core import get_edge_profile_from_image
-import pycv.metrics.esf as pyesf
+import pycv.esf as pyesf
 import numpy as np
 
 

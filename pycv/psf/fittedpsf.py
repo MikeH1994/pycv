@@ -1,7 +1,7 @@
 from __future__ import annotations
 from .radialpsf import RadialPSF
 import numpy as np
-import pycv.metrics.lsf as pylsf
+import pycv.lsf as pylsf
 
 
 class GaussianPSF(RadialPSF):

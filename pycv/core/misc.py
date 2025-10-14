@@ -4,6 +4,9 @@ from typing import Tuple
 from numpy.typing import NDArray
 import os
 import glob
+import math
+from pathlib import Path
+
 
 def stack_coords(arrays: Tuple[np.ndarray, ...]) -> NDArray:
     assert(isinstance(arrays, tuple))
@@ -57,3 +60,22 @@ def get_all_folders_containing_filetype(root_dir, extension, recursive=True):
             files_in_folders.append(matched_files)
 
     return folders_with_files, files_in_folders
+
+def round_up_to(x, base):
+    return math.ceil(x / base) * base
+
+def round_to(x, base):
+    return round(x / base) * base
+
+def round_down_to(x, base):
+    return math.floor(x / base) * base
+
+def clamp(x, lower, upper):
+    return np.clip(x, lower, upper)
+
+
+def get_nth_parent_name(filepath, n):
+    path = Path(filepath)
+    if n-2 >= len(path.parents):
+        raise Exception("n is out of range")
+    return path.parents[n-2].name

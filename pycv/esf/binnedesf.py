@@ -1,15 +1,11 @@
 from __future__ import annotations
-from pycv.metrics.esf.esf import ESF
-from scipy.optimize import curve_fit
-from scipy.special import erf
+from pycv.esf.esf import ESF
 from numpy.typing import NDArray
 from typing import Union
 from .utils import bin_data
-import numpy as np
-import scipy.interpolate
 from scipy.interpolate import InterpolatedUnivariateSpline
 import matplotlib.pyplot as plt
-from ...metrics.lsf.binnedlsf import BinnedLSF
+from pycv.lsf.binnedlsf import BinnedLSF
 from pycv.utils.settings import ESFSettings
 
 

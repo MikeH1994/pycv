@@ -1,9 +1,9 @@
-from typing import Union
+from __future__ import annotations
 from numpy.typing import NDArray
 import numpy as np
 from scipy.integrate import dblquad
 from .psf import PSF
-from ..lsf import LSF
+from pycv.lsf import LSF
 from .utils import kernel_to_interpolation_fn
 
 

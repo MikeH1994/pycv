@@ -117,7 +117,7 @@ class IRBISMetadata:
         collated_metadata.update(settings)
         return IRBISMetadata(collated_metadata)
 
-class IRBISCSVImage:
+class IRBISCSVImageStack:
     def __init__(self, image: np.ndarray, metadata: IRBISMetadata):
         self.image = image
         self.metadata = metadata
@@ -132,27 +132,27 @@ class IRBISCSVImage:
         return self.metadata.name()
 
     @staticmethod
-    def load(fpath) -> IRBISCSVImage:
+    def load(fpath) -> IRBISCSVImageStack:
         metadata = IRBISMetadata.load(fpath)
         img = np.genfromtxt(fpath, delimiter=metadata.delimiter, skip_header=metadata.header_length)
         img = img[:metadata.height, :metadata.width]
-        return IRBISCSVImage(img, metadata)
+        return IRBISCSVImageStack(img, metadata)
 
     @staticmethod
-    def collate(image_list: List[IRBISCSVImage]) -> IRBISCSVImage:
+    def collate(image_list: List[IRBISCSVImageStack]) -> IRBISCSVImageStack:
         metadata_list = [im.metadata for im in image_list]
         image_stack = np.array([im.image for im in image_list], dtype=np.float32)
         metadata = IRBISMetadata.collate(metadata_list)
-        return IRBISCSVImage(image_stack, metadata)
+        return IRBISCSVImageStack(image_stack, metadata)
 
 class IRBISFolder:
-    def __init__(self, datasets: List[IRBISCSVImage]):
-        self.datasets = datasets
+    def __init__(self, datasets: List[IRBISCSVImageStack]):
+        self.image_stacks = datasets
 
     def get(self, index=0):
-        if index>=len(self.datasets):
+        if index>=len(self.image_stacks):
             return None
-        return self.datasets[index]
+        return self.image_stacks[index]
 
     @staticmethod
     def load(folderpath, extension=None, recursive=False, show_progress_bar=False, units=None, max_files_in_folder=None):
@@ -164,13 +164,13 @@ class IRBISFolder:
             if max_files_in_folder is not None:
                 files_in_folder = files_in_folder[: max_files_in_folder]
             for fpath in files_in_folder:
-                img = IRBISCSVImage.load(fpath)
+                img = IRBISCSVImageStack.load(fpath)
                 if img.key() not in results:
                     results[img.key()] = []
                 results[img.key()].append(img)
 
         for key in results.keys():
-            results[key] = IRBISCSVImage.collate(results[key])
+            results[key] = IRBISCSVImageStack.collate(results[key])
         results = [f for f in results.values()]
 
         return IRBISFolder(results)

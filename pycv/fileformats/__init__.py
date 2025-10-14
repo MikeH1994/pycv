@@ -1,1 +1,2 @@
-from .infratec import IRBISCSVImage, IRBISMetadata, IRBISFolder
+from .infratec import IRBISCSVImageStack, IRBISMetadata, IRBISFolder
+from .ofc import OFCReader

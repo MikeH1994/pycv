@@ -1,15 +1,14 @@
 from __future__ import annotations
 from .lsf import LSF
-from ..psf.psf import PSF
-from ..psf.fittedpsf import GaussianPSF
+# from pycv.psf.fittedpsf import GaussianPSF
 from scipy.optimize import curve_fit
-from scipy.special import erf
 from numpy.typing import NDArray
 from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
 from pycv.utils.settings import FittingParams
 from pycv.utils.maths import calculate_fwhm
+
 
 
 class FittedLSF(LSF):
@@ -89,7 +88,7 @@ class GaussianLSF(FittedLSF):
     """def esf(self) -> GaussianESF:
         return GaussianESF()"""
 
-    def psf(self, **kwargs) -> GaussianPSF:
+    """def psf(self, **kwargs) -> GaussianPSF:
         height = 21 if "height" not in kwargs else kwargs["height"]
         width = 21 if "width" not in kwargs else kwargs["width"]
-        return GaussianPSF(self, width, height)
+        return GaussianPSF(self, width, height)"""

@@ -94,16 +94,15 @@ class PinholeCamera:
         pixel_coords[:, :, 0] = xx
         pixel_coords[:, :, 1] = yy
 
-        init_shape = pixel_coords.shape
+
         pixel_direction = self.deproject_to_3d_vector(pixel_coords, apply_undistortion=apply_undistortion, normalise=normalise)
 
         if direction_only:
-            rays = pixel_direction.reshape((*init_shape[:-1], 3))
+            rays = pixel_direction
         else:
             rays = np.zeros((pixel_coords.shape[0], 6), dtype=np.float32)
-            rays[:, :3] = self.p
-            rays[:, 3:] = pixel_direction
-            rays = rays.reshape((*init_shape[:-1], 6))
+            rays[:, :, :3] = self.p
+            rays[:, :, 3:] = pixel_direction
         return rays
 
     def hfov(self):
