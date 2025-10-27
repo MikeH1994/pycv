@@ -79,3 +79,9 @@ def get_nth_parent_name(filepath, n):
     if n-2 >= len(path.parents):
         raise Exception("n is out of range")
     return path.parents[n-2].name
+
+
+def sort_lists_together(tuple_of_lists):
+    sort_indices = sorted(range(len(tuple_of_lists[0])), key=lambda i: tuple_of_lists[0][i])
+    sorted_lists = tuple([[lst[i] for i in sort_indices] for lst in tuple_of_lists])
+    return sorted_lists

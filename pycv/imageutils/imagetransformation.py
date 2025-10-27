@@ -43,10 +43,27 @@ def create_affine_matrix_2(src_image_size, translation: Tuple[float, float] | ND
     return m
 
 
+def affine_to_homography(affine_matrix):
+    if affine_matrix.shape != (2, 3):
+        raise ValueError("Input must be a 2x3 affine matrix.")
+
+    homography = np.vstack([affine_matrix, [0, 0, 1]])
+    return homography
+
+
 class ImageTransformation:
     def __init__(self, transformation=None, src_size=None, dst_size=None):
-        self.transformation = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]) if transformation is None else transformation
-        self.transformation_inv = invert_affine_matrix(self.transformation)
+        if transformation is None:
+            self.transformation = np.eye(3)
+            self.transformation_inv = np.eye(3)
+        elif transformation.shape == (3,3):
+            self.transformation = transformation
+            self.transformation_inv = np.linalg.inv(transformation)
+        elif transformation.shape == (2,3):
+            self.transformation = affine_to_homography(transformation)
+            self.transformation_inv = np.linalg.inv(transformation)
+        else:
+            raise Exception(f"Unknown transformation shape - {transformation.shape}")
         self.dst_size = dst_size
         self.src_size = src_size
 
@@ -60,16 +77,25 @@ class ImageTransformation:
         return self
 
     def transform_image(self, img: NDArray):
-        transformed_image = cv2.warpAffine(img, self.transformation, self.dst_size, flags=cv2.INTER_LINEAR)
-        return transformed_image
+        image = cv2.warpPerspective(img, self.transformation, self.dst_size, flags=cv2.INTER_LINEAR)
+        return image
 
     def transform_points(self, points: NDArray, inverse=False):
         m = self.transformation if inverse is False else self.transformation_inv
-        points = np.array(points)
-        ones = np.ones((points.shape[0], 1))
-        points = np.hstack([points, ones])  # [x, y, 1]
-        transformed_points = m @ points.T  # Apply affine transform
-        return transformed_points.T  # Shape: (N, 2)
+        init_shape = points.shape
+        points = points.reshape(-1,2)
+
+        num_points = points.shape[0]
+        homogeneous_points = np.hstack([points, np.ones((num_points, 1))])
+
+        # Apply the homography matrix
+        transformed_homogeneous = m @ homogeneous_points.T
+
+        # Convert back to Cartesian coordinates
+        transformed_homogeneous /= transformed_homogeneous[2, :]
+        transformed_points = transformed_homogeneous[:2, :].T
+
+        return transformed_points.reshape(init_shape)
 
     def transform_bbox(self, bbox: NDArray):
         pass
@@ -111,6 +137,14 @@ class ImageTransformation:
         ty = pad_y - y1 * scale
 
         m =  np.array([[scale, 0, tx], [0, scale, ty]], dtype=np.float32)
+        return ImageTransformation(m, src_size=src_size, dst_size=dst_size)
+
+    @staticmethod
+    def crop_and_align_image(corners, corners_dst, src_size, dst_size):
+        img_width, img_height = dst_size
+        if corners_dst is None:
+            corners_dst = np.array([[0, 0], [img_width, 0], [img_width, img_height], [0, img_height]], dtype=np.float32)
+        m = cv2.getPerspectiveTransform(corners.astype(np.float32), corners_dst)
         return ImageTransformation(m, src_size=src_size, dst_size=dst_size)
 
     @staticmethod

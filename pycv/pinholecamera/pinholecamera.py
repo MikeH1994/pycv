@@ -1,6 +1,8 @@
 import numpy as np
 from numpy.typing import NDArray
 from typing import Union, Tuple
+
+import pycv
 from .pinhole_camera_maths import deproject_to_3d_vector, project_points_to_2d, find_camera_pose_from_pnp, \
     rotation_matrix_to_axes, distort_points, undistort_points
 from .pinhole_camera_maths import focal_length_to_fov, unpack_camera_matrix, rotation_matrix_to_lookpos, lookpos_to_rotation_matrix
@@ -67,6 +69,16 @@ class PinholeCamera:
         :return:
         """
         return undistort_points(points, self.camera_matrix, self.distortion_coeffs)
+
+    def create_distortion_map(self):
+        xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
+        map = self.distort_points(pycv.stack_coords((xx, yy)))
+        return map
+
+    def create_undistortion_map(self):
+        xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
+        map = self.undistort_points(pycv.stack_coords((xx, yy)))
+        return map
 
     def set_lookpos(self, lookpos, y = None):
         """

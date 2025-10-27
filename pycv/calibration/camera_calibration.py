@@ -19,7 +19,7 @@ class CalibrationTarget:
     board_type: Union[int, None] = None
     object_points: Union[List[NDArray], None] = None
 
-    def __init__(self, board_size: Tuple[int, int], grid_width: float, board_type: int):
+    def __init__(self, board_size: Tuple[int, int], grid_width: float, board_type: int = CALIB_CB_CHECKERBOARD):
         self.board_size: Tuple[int, int] = board_size
         self.grid_width: float = grid_width
         self.board_type: int = board_type
@@ -28,7 +28,7 @@ class CalibrationTarget:
 
 
 class CameraCalibration:
-    default_calibration_flags: int = cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_TANGENT_DIST
+    default_calibration_flags: int = cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_K6 | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_TANGENT_DIST
     device_name: str = ""
     image_size: Union[Tuple[int, int], None] = None
     image_points_per_frame: Union[List[NDArray], None] = None
@@ -79,11 +79,14 @@ class CameraCalibration:
         if verbose:
             print(f"    Device: {self.device_name} Calibration point: {key} Status: {success}")
 
-    def calibrate(self, alpha: float = None, calibration_flags: int = None, verbose=False):
+    def calibrate(self, alpha: float = None, calibration_flags: int = None, verbose=False, init_camera_matrix=None, init_distortion_coeffs=None):
         calibration_flags = self.default_calibration_flags if calibration_flags is None else calibration_flags
+        if init_camera_matrix is not None or init_distortion_coeffs is not None:
+            calibration_flags |= cv2.CALIB_USE_INTRINSIC_GUESS
+
         self.rms, self.camera_matrix, self.distortion_coeffs, self.rvecs, self.tvecs = cv2.calibrateCamera(self.object_points_per_frame,
                                                                                          self.image_points_per_frame,
-                                                                                         self.image_size, None, None,
+                                                                                         self.image_size, cameraMatrix=init_camera_matrix, distCoeffs=init_distortion_coeffs,
                                                                                          flags=calibration_flags)
         if alpha is not None:
             newcamera_matrix, roi = cv2.getOptimalNewCameraMatrix(self.camera_matrix, self.distortion_coeffs,
@@ -206,7 +209,8 @@ def add_calibration_point_checkerboard(img, target: CalibrationTarget, create_im
     success, corners = cv2.findChessboardCornersSB(img, target.board_size, flags=cv2.CALIB_CB_EXHAUSTIVE)
 
     if success is True:
-        corners = cv2.cornerSubPix(img, corners, target.board_size, (-1, -1))
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.001)
+        corners = cv2.cornerSubPix(img, corners, target.board_size, zeroZone=(-1, -1), criteria=criteria)
 
     overlayed_image = None
     if success and create_image:

@@ -12,6 +12,9 @@ class InterpolatedImage:
         y = np.arange(height)
         self.interp_fn = scipy.interpolate.RectBivariateSpline(y, x, self.img)
 
+    def __call__(self, x: Union[float, NDArray], y: Union[float, NDArray], return_as_int: bool = False) -> Union[int, float, NDArray]:
+        return self.f(x, y, return_as_int=return_as_int)
+
     def f(self, x: Union[float, NDArray], y: Union[float, NDArray], return_as_int: bool = False) -> Union[int, float, NDArray]:
         """
 

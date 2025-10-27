@@ -1,9 +1,14 @@
 from __future__ import annotations
+from dataclasses import dataclass
 from typing import Dict, Any, List
 import numpy as np
 import pycv
 from tqdm.auto import tqdm
 import os
+
+@dataclass
+class IRBISFilter:
+    pass
 
 class IRBISMetadata:
     fields = {
@@ -58,9 +63,8 @@ class IRBISMetadata:
         metadata: Dict[str, Any] = {key: None for key in IRBISMetadata.fields}
         with open(fpath) as f:
             header_length = 0
-            while True:
-                line = f.readline().strip()
-                if not line or "[Data]" in line:
+            for line in f:
+                if "[Data]" in line:
                     break
                 header_length += 1
                 if line == "":
@@ -156,14 +160,14 @@ class IRBISFolder:
         return self.image_stacks[index]
 
     @staticmethod
-    def load(folderpath, extension=None, recursive=False, show_progress_bar=False, units=None, max_files_in_folder=None):
+    def load(folderpath, extension=None, recursive=False, show_progress_bar=False, units=None, max_files_per_folder=None):
         results = {}
         folders, files_in_folders = pycv.get_all_folders_containing_filetype(folderpath, extension)
         loader = tqdm(folders, disable = not show_progress_bar)
         for i, folder in enumerate(loader):
             files_in_folder = files_in_folders[i]
-            if max_files_in_folder is not None:
-                files_in_folder = files_in_folder[: max_files_in_folder]
+            if max_files_per_folder is not None:
+                files_in_folder = files_in_folder[: max_files_per_folder]
             for fpath in files_in_folder:
                 img = IRBISCSVImageStack.load(fpath)
                 if img.key() not in results:

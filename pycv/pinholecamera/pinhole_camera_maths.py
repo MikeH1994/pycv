@@ -266,13 +266,14 @@ def unpack_camera_matrix(camera_matrix: NDArray):
     return fx, fy, cx, cy
 
 def distortion_coefficients_to_dict(distortion_coefficients):
-    if len(distortion_coefficients) == 5:
+    distortion_coefficients = distortion_coefficients.reshape(-1)
+    if np.size(distortion_coefficients) == 5:
         k1, k2, p1, p2, k3 = distortion_coefficients
         k4 = k5 = k6 = 0.0
-    elif len(distortion_coefficients) == 8:
+    elif np.size(distortion_coefficients) == 8:
         k1, k2, p1, p2, k3, k4, k5, k6 = distortion_coefficients
     else:
-        raise Exception("Unknown distortion coefficient type")
+        raise Exception(f"Unknown distortion coefficient type- shape {distortion_coefficients.shape}")
     return {
         "k1": k1,
         "k2": k2,
