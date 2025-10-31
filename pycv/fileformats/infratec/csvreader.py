@@ -127,6 +127,12 @@ class IRBISCSVImageStack:
         self.image = image
         self.metadata = metadata
 
+    def get_image(self, average=True):
+        return self.image if not average else np.mean(image, axis=0)
+
+    def get_metadata(self):
+        return self.metadata
+
     def is_temp(self):
         return self.metadata.temp_unit == "degC"
 
@@ -154,16 +160,19 @@ class IRBISFolder:
     def __init__(self, datasets: List[IRBISCSVImageStack]):
         self.image_stacks = datasets
 
+    def __len__(self):
+        return len(self.image_stacks)
+
     def get(self, index=0):
         if index>=len(self.image_stacks):
             return None
         return self.image_stacks[index]
 
     @staticmethod
-    def load(folderpath, extension=None, recursive=False, show_progress_bar=False, units=None, max_files_per_folder=None):
+    def load(folderpath, extension=None, recursive=False, show_progress_bar=False, units=None, max_files_per_folder=None, progressbar_desc = "Loading"):
         results = {}
         folders, files_in_folders = pycv.get_all_folders_containing_filetype(folderpath, extension)
-        loader = tqdm(folders, disable = not show_progress_bar)
+        loader = tqdm(folders, disable = not show_progress_bar, desc=progressbar_desc)
         for i, folder in enumerate(loader):
             files_in_folder = files_in_folders[i]
             if max_files_per_folder is not None:

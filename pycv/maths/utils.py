@@ -36,3 +36,4 @@ def create_fitted_functions(x, y, order):
     y_to_x_fn = interp1d(y_fitted, x_fitted, bounds_error=False, fill_value="extrapolate")
 
     return x_to_y_fn, y_to_x_fn, coeffs
+

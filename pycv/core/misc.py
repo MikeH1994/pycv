@@ -59,7 +59,7 @@ def get_all_folders_containing_filetype(root_dir, extension, recursive=True):
             folders_with_files.append(current_dir)
             files_in_folders.append(matched_files)
 
-    return folders_with_files, files_in_folders
+    return folders_with_files
 
 def round_up_to(x, base):
     return math.ceil(x / base) * base
