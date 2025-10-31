@@ -171,10 +171,10 @@ class IRBISFolder:
     @staticmethod
     def load(folderpath, extension=None, recursive=False, show_progress_bar=False, units=None, max_files_per_folder=None, progressbar_desc = "Loading"):
         results = {}
-        folders, files_in_folders = pycv.get_all_folders_containing_filetype(folderpath, extension)
+        folders = pycv.get_all_folders_containing_filetype(folderpath, extension)
         loader = tqdm(folders, disable = not show_progress_bar, desc=progressbar_desc)
         for i, folder in enumerate(loader):
-            files_in_folder = files_in_folders[i]
+            files_in_folder = pycv.get_all_files_in_folder(folder, extension=extension)
             if max_files_per_folder is not None:
                 files_in_folder = files_in_folder[: max_files_per_folder]
             for fpath in files_in_folder:
