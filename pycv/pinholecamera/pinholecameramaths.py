@@ -5,7 +5,7 @@ from numpy.typing import NDArray
 import scipy.spatial
 from pycv.core.vector_maths import calc_closest_y_direction
 import cv2
-from pycv.core import stack_coords
+from pycv.core import stack
 
 def focal_length_to_fov(fx: float, xres: float) -> float:
     """
@@ -67,7 +67,7 @@ def hfov_to_vfov(hfov: float, xres: int, yres: int) -> float:
     return np.degrees(vfov_radians).item()
 
 
-def create_camera_matrix(cx: float, cy: float, fx: float, fy: float = None):
+def create_camera_matrix(fx: float, fy: float, cx: float, cy: float):
     """
 
     :param cx:
@@ -76,9 +76,6 @@ def create_camera_matrix(cx: float, cy: float, fx: float, fy: float = None):
     :param fy:
     :return:
     """
-
-    if fy is None:
-        fy = fx
 
     camera_matrix = np.array([[fx, 0.0, cx],
                               [0.0, fy, cy],
@@ -120,7 +117,7 @@ def project_points_to_2d(points: NDArray, camera_pos, camera_rotation, camera_ma
     :rtype: np.ndarray
     """
     x_axis, y_axis, z_axis = rotation_matrix_to_axes(camera_rotation)
-    fx, fy, cx, cy = camera_matrix
+    fx, fy, cx, cy = unpack_camera_matrix(camera_matrix)
 
 
     init_shape = points.shape
@@ -160,7 +157,7 @@ def deproject_to_3d_vector(points, r: NDArray, camera_matrix, normalise=True) ->
     """
 
     if isinstance(points, tuple):
-        points = stack_coords(points)
+        points = stack(points)
 
     fx, fy, cx, cy = unpack_camera_matrix(camera_matrix)
 
@@ -285,10 +282,6 @@ def distortion_coefficients_to_dict(distortion_coefficients):
         "p2": p2
     }
 
-def create_inverse_map(undistortion_map):
-    # https://stackoverflow.com/questions/66895102/how-to-apply-distortion-on-an-image-using-opencv-or-any-other-library
-    pass
-
 def distort_points(points, camera_matrix, distortion_coeffs):
     assert(len(distortion_coeffs) == 5 or len(distortion_coeffs) == 8)
     init_shape = points.shape
@@ -343,3 +336,27 @@ def undistort_points(distorted_points, camera_matrix, distortion_coeffs):
     undistorted_points = cv2.undistortPoints(distorted_points, camera_matrix, distortion_coeffs, P=camera_matrix)
     undistorted_points = undistorted_points.reshape(init_shape)
     return undistorted_points
+
+def invert_distortion_maps(map_u, map_v, n_iterations=100, decay=0.9):
+    """
+
+    :param map_u: 2D array. The value at each pixel coordinate defines corresponding u coordinate in distorted space
+    :param map_v: 2D array. The value at each pixel coordinate defines corresponding v coordinate in distorted space
+    :return:
+    """
+    assert(map_u.shape == map_v.shape)
+    F = np.zeros((map_u.shape[0], map_u.shape[1], 2), dtype=np.float32)
+    F[:, :, 0] = map_u
+    F[:, :, 1] = map_v
+
+    (h, w) = F.shape[:2]  # (h, w, 2), "xymap"
+    I = np.zeros_like(F)
+    I[:, :, 1], I[:, :, 0] = np.indices((h, w))  # identity map
+    P = np.copy(I)
+    k = 1
+    for i in range(n_iterations):
+        correction = I - cv2.remap(F, P, None, interpolation=cv2.INTER_LINEAR)
+        P += correction * k
+        k *= decay
+    inverted_map_u, inverted_map_v = P[:, :, 0], P[:, :, 1]
+    return inverted_map_u, inverted_map_v

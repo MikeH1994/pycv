@@ -89,6 +89,13 @@ def to_grayscale(img: NDArray) -> NDArray:
     else:
         raise Exception("Logic error")
 
+def image_centre_of_mass(image: NDArray) -> Tuple[float, float]:
+    assert(len(image.shape) == 2)
+
+    xx, yy = np.meshgrid(np.arange(image.shape[1], dtype=np.float32), np.arange(image.shape[0], dtype=np.float32))
+    cx = np.sum(xx * image) / np.sum(image)
+    cy = np.sum(yy * image) / np.sum(image)
+    return cx, cy
 
 def n_channels(img: NDArray):
     """

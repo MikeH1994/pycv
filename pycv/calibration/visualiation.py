@@ -18,7 +18,7 @@ def visualise_distortion(camera: PinholeCamera, new_fig=True, color='black', lab
         xarr = np.full(1000, fill_value=x)
         yarr = np.linspace(-100, yres+100, 1000)
 
-        xdistorted, ydistorted = camera.distort_points(pycv.core.stack_coords((xarr, yarr)))
+        xdistorted, ydistorted = camera.distort_points(pycv.core.stack((xarr, yarr)))
         if not label_set:
             plt.plot(xdistorted, ydistorted, color=color, label=label)
             label_set=True
@@ -30,7 +30,7 @@ def visualise_distortion(camera: PinholeCamera, new_fig=True, color='black', lab
         yarr = np.full(1000, fill_value=y)
         xarr = np.linspace(-100, xres+100, 1000)
 
-        xdistorted, ydistorted = camera.distort_points(pycv.core.stack_coords((xarr, yarr)))
+        xdistorted, ydistorted = camera.distort_points(pycv.core.stack((xarr, yarr)))
         plt.plot(xdistorted, ydistorted, color=color)
 
     plt.xlim([0, xres-1])

@@ -19,16 +19,22 @@ import matplotlib.pyplot as plt
 
 
 class BaseGUI:
-    def __init__(self, window: tkinter.Tk):
+    def __init__(self, window: tkinter.Tk, width=500, height=500):
         self.window = window
         self.window.protocol("WM_DELETE_WINDOW", self.on_close)
         self.menu = tkinter.Menu(self.window)
         self.window.config(menu=self.menu)
-
+        self.window.minsize(width, height)
 
     def on_close(self):
+        self.cleanup_before_close()
         self.window.quit()
         self.window.destroy()
+
+    # noinspection PyMethodMayBeStatic
+    def cleanup_before_close(self):
+        print("Note: cleanup_before_close() has not been overridden")
+        return
 
     # noinspection PyMethodMayBeStatic
     def add_listbox(self, master, row=0, column=0, callback: Callable=None, **kwargs):
@@ -98,6 +104,7 @@ class BaseGUI:
         ax.autoscale_view()  # Rescale the view
         canvas.draw()     # Redraw the canvas
 
+    # noinspection PyMethodMayBeStatic
     def add_numerical_entry(self, parent, row, column, default_value: int, callback=None):
         def validate_positive_integer(new_value):
             if new_value == "":
@@ -113,7 +120,7 @@ class BaseGUI:
         entry.grid(row=row, column=column, sticky="nesw")
         return entry, entry_var
 
-
+    # noinspection PyMethodMayBeStatic
     def add_label(self, parent, text, row=0, column=0):
         label = Label(parent, text=text)
         label.grid(row=row, column=column, sticky="nsew")
@@ -199,3 +206,8 @@ class BaseGUI:
         if default_value is not None:
             is_checked.set(int(default_value))
         return checkbutton, is_checked
+
+    def add_button(self, master, text, callback, row, column):
+        button = tk.Button(master, text=text, command=callback)
+        button.grid(row=row, column=column, sticky="nsew")
+        return button

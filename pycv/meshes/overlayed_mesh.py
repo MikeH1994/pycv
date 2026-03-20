@@ -2,7 +2,7 @@ import open3d as o3d
 import numpy as np
 import pycv
 from pycv.pinholecamera import PinholeCamera
-from pycv.core import stack_coords, unstack_coords
+from pycv.core import stack, unstack
 from numpy.typing import NDArray
 from typing import List
 
@@ -90,7 +90,7 @@ class OverlayedMesh:
     def create_mask(self, camera: PinholeCamera):
         mask = np.zeros((camera.yres, camera.xres), dtype=np.uint8)
         coords = camera.project_points_to_2d(np.asarray(self.mesh.vertices), return_as_int=True)
-        u, v = unstack_coords(coords)
+        u, v = unstack(coords)
         valid_indices = (v >= 0) & (v < camera.yres - 1) & (u >= 0) & (u < camera.xres - 1)
         mask[v[valid_indices]][u[valid_indices]] = 1
         return mask

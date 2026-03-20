@@ -1,11 +1,8 @@
 from numpy.typing import NDArray
 import numpy as np
-import scipy.integrate
 from scipy.integrate import simpson
 from scipy.optimize import curve_fit
-from pycv.utils.matlab import matlab_round, matlab_conv
-import math
-from pycv.metrics.targets.slantededge.utils import fermi_function
+from pycv.slantededge import fermi_function
 
 
 

@@ -1,2 +1,3 @@
 from .camera_calibration import CalibrationTarget, CameraCalibration
+from .fitted_camera_calibration import FittedCameraCalibration
 from .visualiation import visualise_distortion

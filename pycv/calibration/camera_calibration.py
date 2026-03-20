@@ -10,7 +10,8 @@ import pycv
 from pycv.constants import *
 from pycv.pinholecamera import PinholeCamera
 from pycv.pinholecamera import unpack_camera_matrix, distortion_coefficients_to_dict
-
+import json
+import os
 
 class CalibrationTarget:
     board_size: Union[Tuple[int, int]] = None
@@ -48,6 +49,8 @@ class CameraCalibration:
         self.image_points_per_frame: List[NDArray] = []
         self.image_keys: List[Union[str, int]] = []
         self.object_points_per_frame: List[NDArray] = []
+        self.target_positions = []
+        self.target_rotations = []
         self.device_name = device_name
 
     def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None, plot=False, verbose=False):
@@ -84,10 +87,19 @@ class CameraCalibration:
         if init_camera_matrix is not None or init_distortion_coeffs is not None:
             calibration_flags |= cv2.CALIB_USE_INTRINSIC_GUESS
 
-        self.rms, self.camera_matrix, self.distortion_coeffs, self.rvecs, self.tvecs = cv2.calibrateCamera(self.object_points_per_frame,
+        self.rms, self.camera_matrix, self.distortion_coeffs, rvecs, tvecs = cv2.calibrateCamera(self.object_points_per_frame,
                                                                                          self.image_points_per_frame,
                                                                                          self.image_size, cameraMatrix=init_camera_matrix, distCoeffs=init_distortion_coeffs,
                                                                                          flags=calibration_flags)
+
+        self.target_positions = []
+        self.target_rotations = []
+        for i, (rvec, tvec) in enumerate(zip(rvecs, tvecs)):
+            R, _ = cv2.Rodrigues(rvec)
+            t = tvec.reshape(3)
+            self.target_rotations.append(R)
+            self.target_positions.append(t)
+
         if alpha is not None:
             newcamera_matrix, roi = cv2.getOptimalNewCameraMatrix(self.camera_matrix, self.distortion_coeffs,
                                                                   self.image_size, alpha)
@@ -149,17 +161,39 @@ class CameraCalibration:
         print("{} {}".format(lpad2, self.distortion_coeffs))
 
     def save(self, fpath: str, verbose=False):
-        with open(fpath, 'wb') as f:
-            pickle.dump(self.__dict__, f)
-        if verbose:
-            print(f"Device '{self.device_name}' calibration saved to {fpath}")
+        if fpath.endswith(".pck"):
+            with open(fpath, 'wb') as f:
+                pickle.dump(self.__dict__, f)
+            if verbose:
+                print(f"Device '{self.device_name}' calibration saved to {fpath}")
+        elif fpath.endswith(".json"):
+            data = {
+                "camera_matrix": self.camera_matrix.tolist(),
+                "distortion_coeffs": self.distortion_coeffs.tolist(),
+                "image_size": self.image_size,
+                "target_positions": [m.tolist() for m in self.target_positions],
+                "target_rotations": [m.tolist() for m in self.target_rotations],
+                "rms": self.rms,
+                "image_points_per_frame": [m.tolist() for m in self.image_points_per_frame]
+            }
+            os.makedirs(os.path.dirname(fpath), exist_ok=True)
+            with open(fpath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=4, ensure_ascii=False)
+        else:
+            raise NotImplementedError("Unknown save format: {}".format(fpath))
 
     def load(self, fpath: str, verbose=False):
-        with open(fpath, "rb") as f:
-            data = pickle.load(f)
-            if data is None:
-                raise Exception("Invalid data loaded")
-            self.__dict__ = data
+        if fpath.endswith(".pck"):
+            with open(fpath, "rb") as f:
+                data = pickle.load(f)
+                if data is None:
+                    raise Exception("Invalid data loaded")
+                self.__dict__ = data
+        elif fpath.endswith(".json"):
+            raise NotImplementedError("Unknown save format: {}".format(fpath))
+        else:
+            raise NotImplementedError("Unknown save format: {}".format(fpath))
+
         if verbose:
             print(f"Device '{self.device_name}' calibration loaded from {fpath}")
             self.print()

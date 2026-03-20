@@ -1,13 +1,14 @@
 import numpy as np
 from numpy.typing import NDArray
 from typing import Union, Tuple
-
 import pycv
-from .pinhole_camera_maths import deproject_to_3d_vector, project_points_to_2d, find_camera_pose_from_pnp, \
+from .pinholecameramaths import deproject_to_3d_vector, project_points_to_2d, find_camera_pose_from_pnp, \
     rotation_matrix_to_axes, distort_points, undistort_points
-from .pinhole_camera_maths import focal_length_to_fov, unpack_camera_matrix, rotation_matrix_to_lookpos, lookpos_to_rotation_matrix
+from .pinholecameramaths import focal_length_to_fov, unpack_camera_matrix, rotation_matrix_to_lookpos, lookpos_to_rotation_matrix
 import cv2
-from ..core import unstack_coords
+from ..core import unstack
+from ..imageutils import InterpolatedImage
+from .interpolateddistortionmap import InterpolatedDistortionMap, InterpolatedDistortionMap
 
 
 class PinholeCamera:
@@ -70,15 +71,49 @@ class PinholeCamera:
         """
         return undistort_points(points, self.camera_matrix, self.distortion_coeffs)
 
-    def create_distortion_map(self):
-        xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
-        map = self.distort_points(pycv.stack_coords((xx, yy)))
+    def undistort_image(self, image: NDArray):
+        """
+
+        :param image:
+        :return:
+        """
+        image = cv2.undistort(image, self.camera_matrix, self.distortion_coeffs)
+        return image
+
+    def create_distortion_map(self, x: np.ndarray = None, y: np.ndarray = None):
+        x = np.arange(self.xres) if x is None else x
+        y = np.arange(self.yres) if y is None else y
+        xx, yy = np.meshgrid(x, y)
+        map = self.distort_points(pycv.stack((xx, yy)))
         return map
 
-    def create_undistortion_map(self):
-        xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
-        map = self.undistort_points(pycv.stack_coords((xx, yy)))
+    def create_undistortion_map(self, x: np.ndarray = None, y: np.ndarray = None):
+        x = np.arange(self.xres) if x is None else x
+        y = np.arange(self.yres) if y is None else y
+        xx, yy = np.meshgrid(x, y)
+        map = self.undistort_points(pycv.stack((xx, yy)))
         return map
+
+    def create_distortion_map_functions(self, boundary=100):
+        x = np.arange(-boundary, self.xres + boundary, dtype=np.float32)
+        y = np.arange(-boundary, self.yres + boundary, dtype=np.float32)
+        distortion_map_u, distorted_map_v = unstack(self.create_distortion_map(x, y))
+        distortion_map_u = InterpolatedImage(distortion_map_u, x=x, y=y)
+        distorted_map_v = InterpolatedImage(distorted_map_v, x=x, y=y)
+        return distortion_map_u, distorted_map_v
+
+    def create_undistortion_map_functions(self, boundary=100):
+        x = np.arange(-boundary, self.xres + boundary, dtype=np.float32)
+        y = np.arange(-boundary, self.yres + boundary, dtype=np.float32)
+        undistortion_map_u, undistorted_map_v = unstack(self.create_undistortion_map(x, y))
+        undistortion_map_u = InterpolatedImage(undistortion_map_u, x=x, y=y)
+        undistortion_map_v = InterpolatedImage(undistorted_map_v, x=x, y=y)
+        return undistortion_map_u, undistortion_map_v
+
+    def create_interpolated_distortion_map(self):
+        distortion_map_u, distortion_map_v = self.create_distortion_map_functions()
+        undistortion_map_u, undistortion_map_v = self.create_undistortion_map_functions()
+        return InterpolatedDistortionMap(distortion_map_u, distortion_map_v, undistortion_map_u, undistortion_map_v)
 
     def set_lookpos(self, lookpos, y = None):
         """
@@ -105,7 +140,6 @@ class PinholeCamera:
         pixel_coords = np.zeros((*xx.shape, 2), dtype=np.float32)
         pixel_coords[:, :, 0] = xx
         pixel_coords[:, :, 1] = yy
-
 
         pixel_direction = self.deproject_to_3d_vector(pixel_coords, apply_undistortion=apply_undistortion, normalise=normalise)
 
@@ -158,6 +192,33 @@ class PinholeCamera:
         dst[:3, :3] = self.r
         dst[3, :3] = self.p
         return dst
+
+    def meshgrid(self):
+        xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
+        return xx, yy
+
+    def create_grid(self, distort=True, width=None):
+        if width is None:
+            width = self.xres // 10
+        x_pos = np.arange(width, self.xres - width//2 + 1, width)
+        y_pos = np.arange(width, self.yres - width//2 + 1, width)
+        dst_x = []
+        dst_y = []
+        for x in x_pos:
+            y_arr = np.copy(y_pos)
+            x_arr = np.full(y_arr.shape, fill_value=x)
+            if distort:
+                x_arr, y_arr = unstack(self.distort_points(pycv.stack(x_arr, y_arr)))
+            dst_x.append(x_arr)
+            dst_y.append(y_arr)
+        for y in y_pos:
+            x_arr = np.copy(x_pos)
+            y_arr = np.full(x_arr.shape, fill_value=y)
+            if distort:
+                x_arr, y_arr = unstack(self.distort_points(pycv.stack(x_arr, y_arr)))
+            dst_x.append(x_arr)
+            dst_y.append(y_arr)
+        return dst_x, dst_y
 
     def pixel_size(self, distance, using_fov=True):
         if using_fov:

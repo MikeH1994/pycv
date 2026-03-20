@@ -6,10 +6,9 @@ from numpy.typing import NDArray
 from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
-import pycv.lsf
 from pycv.utils.settings import FittingParams
 from pycv.utils.maths import calculate_bounds_based_on_fwhm
-
+from pycv.esf.fittedlsf import GaussianLSF
 
 class FittedESF(ESF):
     params: NDArray = None
@@ -72,7 +71,7 @@ class GaussianESF(FittedESF):
         return np.zeros(self.n_terms*2)
 
     def lsf(self, **kwargs):
-        return pycv.metrics.lsf.GaussianLSF(self.x_data, self.f_data, **kwargs)
+        return GaussianLSF(self.x_data, self.f_data, **kwargs)
 
     @staticmethod
     def fn(x, *args):

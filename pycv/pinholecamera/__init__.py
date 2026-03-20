@@ -1,2 +1,5 @@
-from .pinhole_camera_maths import focal_length_to_fov, fov_to_focal_length, create_camera_matrix, create_distortion_coeffs, unpack_camera_matrix, undistort_points, distort_points, distortion_coefficients_to_dict
+from .pinholecameramaths import focal_length_to_fov, fov_to_focal_length, create_camera_matrix, create_distortion_coeffs, unpack_camera_matrix, undistort_points, distort_points, distortion_coefficients_to_dict, invert_distortion_maps
 from .pinholecamera import PinholeCamera
+from .interpolateddistortionmap import InterpolatedDistortionMap
+from .interpolatedpinholecamera import InterpolatedPinholeCamera
+from .averagepinholecamera import AveragePinholeCamera

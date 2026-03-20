@@ -1,7 +1,7 @@
 import os
 import cv2
 import matplotlib.pyplot as plt
-import pycv.metrics.targets.slantededge.core
+import pycv.slantededge.core
 import pycv.esf as pyesf
 import numpy as np
 
@@ -16,8 +16,8 @@ def run_get_edge_points():
             if transpose:
                 img = np.transpose(img)
 
-            x_fit, y_fit = pycv.metrics.targets.slantededge.core.get_edge_points(img, edge_detection_mode="fit")[0]
-            x_cent, y_cent = pycv.metrics.targets.slantededge.core.get_edge_points(img, edge_detection_mode="centroid")[0]
+            x_fit, y_fit = pycv.slantededge.core.get_edge_points(img, edge_detection_mode="fit")[0]
+            x_cent, y_cent = pycv.slantededge.core.get_edge_points(img, edge_detection_mode="centroid")[0]
 
             plt.imshow(img)
             plt.scatter(x_fit[::4], y_fit[::4], color='r')

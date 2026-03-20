@@ -5,7 +5,7 @@ from typing import Union
 from .utils import bin_data
 from scipy.interpolate import InterpolatedUnivariateSpline
 import matplotlib.pyplot as plt
-from pycv.lsf.binnedlsf import BinnedLSF
+from pycv.esf.binnedlsf import BinnedLSF
 from pycv.utils.settings import ESFSettings
 
 

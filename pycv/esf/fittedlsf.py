@@ -1,6 +1,5 @@
 from __future__ import annotations
-from .lsf import LSF
-# from pycv.psf.fittedpsf import GaussianPSF
+from pycv.esf.lsf import LSF
 from scipy.optimize import curve_fit
 from numpy.typing import NDArray
 from typing import Union

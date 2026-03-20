@@ -4,8 +4,8 @@ from typing import Union, Dict
 from scipy.interpolate import InterpolatedUnivariateSpline
 import matplotlib.pyplot as plt
 from pycv.utils.matlab import matlab_round
-from .lsf import LSF
-from .fittedlsf import GaussianLSF, FittedLSF
+from pycv.esf.lsf import LSF
+from pycv.esf.fittedlsf import GaussianLSF, FittedLSF
 from pycv.metrics.mtf.core import compute_mtf, fir2fix
 from pycv.metrics.mtf import MTF
 from pycv.utils.settings import FittingParams
