@@ -105,3 +105,7 @@ def format_bounds(x0, x1, interval, mode = "outside"):
         x0 = round_to(x0, interval)
         x1 = round_to(x1, interval)
     return x0, x1
+
+
+def rms(x):
+    return np.sqrt(np.square(x).mean())

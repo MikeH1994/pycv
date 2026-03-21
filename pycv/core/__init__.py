@@ -1,2 +1,3 @@
-from .misc import stack, unstack, get_subfolders, get_all_files_in_folder, round_to, round_down_to, round_up_to, get_nth_parent_name, sort_lists_together, format_bounds
+from .misc import stack, unstack, get_subfolders, get_all_files_in_folder, round_to, round_down_to, round_up_to, get_nth_parent_name, sort_lists_together, format_bounds, rms
 from .image_utils import image_centre_of_mass, image_is_valid, is_grayscale, is_rgb, convert_to_8_bit, n_channels
+from .vector_maths import rotation_matrix_to_euler_angles, euler_angles_to_rotation_matrix, create_intrinsic_matrix

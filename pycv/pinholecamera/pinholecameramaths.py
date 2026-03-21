@@ -6,6 +6,7 @@ import scipy.spatial
 from pycv.core.vector_maths import calc_closest_y_direction
 import cv2
 from pycv.core import stack
+from scipy.spatial.transform import Rotation
 
 def focal_length_to_fov(fx: float, xres: float) -> float:
     """
@@ -194,6 +195,14 @@ def find_camera_pose_from_pnp(camera_matrix: NDArray, object_points: NDArray, im
     rotation_matrix, _ = cv2.Rodrigues(rvec)
     rotation_matrix = np.linalg.inv(rotation_matrix)
     pos = -np.matmul(rotation_matrix, tvec.reshape(3))
+    return pos, rotation_matrix
+
+def find_object_pose_from_pnp(camera_matrix: NDArray, object_points: NDArray, image_points: NDArray,
+                              distortion_coeffs: NDArray = np.zeros(5)):
+    pos_cam, rotation_matrix_cam = find_camera_pose_from_pnp(camera_matrix, object_points, image_points, distortion_coeffs)
+     # Invert to get object wrt camera:
+    rotation_matrix = np.linalg.inv(rotation_matrix_cam)
+    pos = -rotation_matrix @ pos_cam
     return pos, rotation_matrix
 
 def rotation_matrix_to_axes(r: NDArray) -> Tuple[NDArray, NDArray, NDArray]:

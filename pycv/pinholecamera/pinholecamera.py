@@ -1,14 +1,17 @@
+from typing import Tuple
+
+import cv2
 import numpy as np
 from numpy.typing import NDArray
-from typing import Union, Tuple
+
 import pycv
+from .interpolateddistortionmap import InterpolatedDistortionMap
 from .pinholecameramaths import deproject_to_3d_vector, project_points_to_2d, find_camera_pose_from_pnp, \
     rotation_matrix_to_axes, distort_points, undistort_points
-from .pinholecameramaths import focal_length_to_fov, unpack_camera_matrix, rotation_matrix_to_lookpos, lookpos_to_rotation_matrix
-import cv2
+from .pinholecameramaths import focal_length_to_fov, unpack_camera_matrix, lookpos_to_rotation_matrix
+from ..core import rotation_matrix_to_euler_angles, euler_angles_to_rotation_matrix
 from ..core import unstack
 from ..imageutils import InterpolatedImage
-from .interpolateddistortionmap import InterpolatedDistortionMap, InterpolatedDistortionMap
 
 
 class PinholeCamera:
@@ -127,7 +130,7 @@ class PinholeCamera:
         self.r = lookpos_to_rotation_matrix(self.p, lookpos, y)
 
 
-    def generate_rays(self, apply_undistortion=True, direction_only=False, normalise=True) -> NDArray:
+    def generate_rays(self, apply_undistortion=True, direction_only=False, normalise=True, pixel_coords = None) -> NDArray:
         """
         Generate a set of rays for each pixel in Open3D's format for use in the Open3D raycasting. Each Open3D ray is
             a vector of length 6, where the first 3 elements correspond to the origin of the ray (the camera position),
@@ -135,11 +138,13 @@ class PinholeCamera:
         :return: a 3D array of shape (yres, xres, n_samples, 6) corresponding to the open3d rays for each pixel
         :rtype: np.ndarray
         """
-
-        xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
-        pixel_coords = np.zeros((*xx.shape, 2), dtype=np.float32)
-        pixel_coords[:, :, 0] = xx
-        pixel_coords[:, :, 1] = yy
+        if pixel_coords is None:
+            xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
+            pixel_coords = np.zeros((*xx.shape, 2), dtype=np.float32)
+            pixel_coords[:, :, 0] = xx
+            pixel_coords[:, :, 1] = yy
+        init_shape = pixel_coords.shape[:-1]
+        pixel_coords = pixel_coords.reshape(-1, 2)
 
         pixel_direction = self.deproject_to_3d_vector(pixel_coords, apply_undistortion=apply_undistortion, normalise=normalise)
 
@@ -147,9 +152,30 @@ class PinholeCamera:
             rays = pixel_direction
         else:
             rays = np.zeros((pixel_coords.shape[0], 6), dtype=np.float32)
-            rays[:, :, :3] = self.p
-            rays[:, :, 3:] = pixel_direction
+            rays[:, :3] = self.p
+            rays[:, 3:] = pixel_direction
+        rays = rays.reshape(*init_shape, -1)
         return rays
+
+    def set_euler_angles(self, angles, degrees=True, mode='absolute'):
+        assert(mode == 'absolute' or mode == 'relative')
+        if not degrees:
+            angles = np.degrees(angles)
+
+        if mode == 'absolute':
+            r = euler_angles_to_rotation_matrix(angles, degrees=degrees)
+        else:
+            euler_angles = rotation_matrix_to_euler_angles(self.r, degrees=degrees)
+            euler_angles += angles
+            r = euler_angles_to_rotation_matrix(euler_angles, degrees=degrees)
+        self.r = r
+
+    def set_pos(self, pos: NDArray, mode = 'absolute'):
+        assert(mode == 'absolute' or mode == 'relative')
+        if mode == 'absolute':
+            self.p = pos
+        else:
+            self.p += pos
 
     def hfov(self):
         return focal_length_to_fov(self.fx(), self.xres)
@@ -186,6 +212,9 @@ class PinholeCamera:
     def axes(self):
         axes = rotation_matrix_to_axes(self.r)
         return axes
+
+    def up(self):
+        return self.axes()[1]
 
     def extrinsics(self):
         dst = np.eye(4)

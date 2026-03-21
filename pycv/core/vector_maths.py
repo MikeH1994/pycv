@@ -85,3 +85,8 @@ def rotation_matrix_to_euler_angles(r: NDArray, degrees: bool = True):
     return r.as_euler('xyz', degrees=degrees)
 
 
+def create_intrinsic_matrix(translation, rotation):
+    T = np.eye(4)
+    T[:3,:3] = rotation
+    T[:3, 3] = translation.reshape(3)
+    return T

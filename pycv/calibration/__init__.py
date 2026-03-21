@@ -1,3 +1,3 @@
-from .camera_calibration import CalibrationTarget, CameraCalibration
+from .camera_calibration import CalibrationTarget, CameraCalibration, find_checkerboard_corners, add_calibration_point_circle_grid
 from .fitted_camera_calibration import FittedCameraCalibration
 from .visualiation import visualise_distortion
