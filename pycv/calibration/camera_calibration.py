@@ -7,6 +7,7 @@ from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 import pickle
 import pycv
+from pycv.core import convert_to_8_bit
 from pycv.constants import *
 from pycv.pinholecamera import PinholeCamera
 from pycv.pinholecamera import unpack_camera_matrix, distortion_coefficients_to_dict
@@ -20,14 +21,21 @@ class CalibrationTarget:
     board_type: Union[int, None] = None
     object_points: Union[List[NDArray], None] = None
 
-    def __init__(self, board_size: Tuple[int, int], grid_width: float, board_type: int = CALIB_CB_CHECKERBOARD, grid_height=None):
+    def __init__(self, board_size: Tuple[int, int], checker_width: float, checker_height=None, board_type: int = CALIB_BOARD_TYPE_CHECKERBOARD):
         self.board_size: Tuple[int, int] = board_size
-        self.grid_width: float = grid_width
-        self.grid_height = grid_width if grid_height is None else grid_height
+        self.grid_width: float = checker_width
+        self.grid_height = checker_width if checker_height is None else checker_height
         self.board_type: int = board_type
-        self.grid_type: int = CALIB_CB_SYMMETRIC_GRID if self.board_type != CALIB_CB_CIRCLE_GRID_ASYMMETRIC else CALIB_CB_SYMMETRIC_GRID
+        if board_type == CALIB_BOARD_TYPE_CHECKERBOARD or board_type == CALIB_BOARD_TYPE_CIRCLE_GRID_SYMMETRIC:
+            self.grid_type = cv2.CALIB_CB_SYMMETRIC_GRID
+        elif board_type == CALIB_BOARD_TYPE_CIRCLE_GRID_ASYMMETRIC:
+            self.grid_type = cv2.CALIB_CB_ASYMMETRIC_GRID
+        else:
+            raise Exception("Unknown board type supplied")
         self.object_points: NDArray = create_calibration_target_object_points(self.board_size, self.grid_width, self.grid_height)
 
+    def get_object_points(self, pos=np.array([0, 0, 0]), rot=np.eye(3)) -> NDArray:
+        return self.object_points @ rot.T + pos
 
 class CameraCalibration:
     default_calibration_flags: int = cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_K6 | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_TANGENT_DIST
@@ -54,7 +62,7 @@ class CameraCalibration:
         self.target_rotations = []
         self.device_name = device_name
 
-    def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None, plot=False, verbose=False):
+    def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None, display=False, verbose=False):
         key = len(self.image_keys) if key is None else key
         assert(key not in self.image_keys), "Key already exists!"
         xy_image_size = img.shape[:2][::-1]
@@ -65,10 +73,10 @@ class CameraCalibration:
         assert(self.image_size == xy_image_size), "Dimensions of image do not match previous calibration point-\n" \
                                                       "current: {} stored: {}".format(xy_image_size, self.image_size)
         self.n_frames += 1
-        if target.board_type == CALIB_CB_CHECKERBOARD:
-            success, image_points, overlayed_image = find_checkerboard_corners(img, target.board_size, create_image=plot)
+        if target.board_type == CALIB_BOARD_TYPE_CHECKERBOARD:
+            success, image_points, overlayed_image = find_checkerboard_corners(img, target.board_size, create_image=display)
         else:
-            success, image_points, overlayed_image = add_calibration_point_circle_grid(img, target, create_image=plot)
+            success, image_points, overlayed_image = find_circles_grid(img, target, create_image=display)
         if success:
             self.image_points_per_frame.append(image_points)
             self.object_points_per_frame.append(target.object_points.astype(np.float32))
@@ -76,7 +84,7 @@ class CameraCalibration:
         else:
             self.n_frames_failed += 1
 
-        if overlayed_image is not None and plot:
+        if overlayed_image is not None and display:
             plt.imshow(overlayed_image)
             plt.show()
 
@@ -220,36 +228,36 @@ def create_calibration_target_object_points(board_size: Tuple[int, int], dx: flo
     return np.array(object_points)
 
 
-def add_calibration_point_circle_grid(img, calib_target: CalibrationTarget, use_larger_blobs=False, create_image=True):
+def find_circles_grid(img, board_size, use_larger_blobs=False, create_image=True, grid_type=cv2.CALIB_CB_SYMMETRIC_GRID):
     if use_larger_blobs:
         params = cv2.SimpleBlobDetector_Params()
         params.maxArea = 1e5
         blob_detector = cv2.SimpleBlobDetector_create(params)
     else:
         blob_detector = None
-    success, image_points = cv2.findCirclesGrid(img, calib_target.board_size, calib_target.grid_type, blobDetector=blob_detector)
+    success, image_points = cv2.findCirclesGrid(img,board_size, grid_type, blobDetector=blob_detector)
     if success is False and use_larger_blobs is False:
         # as we didn't find it using the default arguments, try again with larger blob size
-        return add_calibration_point_circle_grid(img, calib_target, use_larger_blobs=True, create_image=create_image)
+        return find_circles_grid(img, board_size, use_larger_blobs=True, create_image=create_image, grid_type=grid_type)
 
     overlayed_image = None
     if success and create_image:
         img_rgb = pycv.to_rgb(img)
-        overlayed_image = cv2.drawChessboardCorners(img_rgb, calib_target.board_size, image_points, success)
+        overlayed_image = cv2.drawChessboardCorners(img_rgb, board_size, image_points, success)
 
     return success, image_points, overlayed_image
 
 
-def find_checkerboard_corners(img, board_size: Tuple[int, int], create_image: bool = True):
-    success, corners = cv2.findChessboardCornersSB(img, board_size, flags=cv2.CALIB_CB_EXHAUSTIVE)
+def find_checkerboard_corners(img, board_size: Tuple[int, int], create_image: bool = True, winSize=(11, 11), zeroZone=(-1, -1)):
+    img8 = img if img.dtype == np.uint8 else convert_to_8_bit(img)
+    success, corners = cv2.findChessboardCornersSB(img8, board_size, flags=cv2.CALIB_CB_EXHAUSTIVE)
 
     if success is True:
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.001)
-        corners = cv2.cornerSubPix(img, corners, board_size, zeroZone=(-1, -1), criteria=criteria)
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-8)
+        corners = cv2.cornerSubPix(img, corners, winSize=winSize, zeroZone=zeroZone, criteria=criteria)
 
     overlayed_image = None
     if success and create_image:
-        img_rgb = pycv.to_rgb(img)
+        img_rgb = pycv.to_rgb(img8)
         overlayed_image = cv2.drawChessboardCorners(img_rgb, board_size, corners, success)
     return success, corners, overlayed_image
-

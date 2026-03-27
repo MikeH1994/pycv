@@ -25,9 +25,7 @@ def convert_to_8_bit(src: NDArray, min_val=None, max_val=None, return_as_rgb=Fal
     img = src.astype(np.float32)
     img[img < min_val] = min_val
     img[img > max_val] = max_val
-    img -= min_val
-    img *= scale_factor
-    img = img.astype(np.uint8)
+    img = ((img-min_val) * scale_factor).astype(np.uint8)
     if return_as_rgb:
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
     return img
