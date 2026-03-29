@@ -331,20 +331,68 @@ def distort_points(points, camera_matrix, distortion_coeffs):
     return points_distorted
 
 
-def undistort_points(distorted_points, camera_matrix, distortion_coeffs):
+def undistort_points(distorted_points, camera_matrix, distortion_coeffs,
+                           max_iter=20, eps=1e-12):
     """
-
-    :param camera_matrix:
-    :param distortion_coeffs:
-    :param distorted_points:
-    :return:
+    Exact inverse of distort_points() using iterative Newton-style refinement.
+    Supports 5 or 8 distortion coefficients (Brown–Conrady model).
+    Returns pixel coordinates (same convention as distort_points).
     """
-    # convert points to (N, 1, 2)
     init_shape = distorted_points.shape
-    distorted_points = distorted_points.reshape((-1, 2)).astype(np.float64)
-    undistorted_points = cv2.undistortPoints(distorted_points, camera_matrix, distortion_coeffs, P=camera_matrix)
-    undistorted_points = undistorted_points.reshape(init_shape)
-    return undistorted_points
+    distorted_points = distorted_points.reshape(-1, 2).astype(np.float64)
+
+    fx = camera_matrix[0, 0]
+    fy = camera_matrix[1, 1]
+    cx = camera_matrix[0, 2]
+    cy = camera_matrix[1, 2]
+
+    # unpack distortion coefficients
+    if len(distortion_coeffs) == 5:
+        k1, k2, p1, p2, k3 = distortion_coeffs.reshape(-1)
+        k4 = k5 = k6 = 0.0
+    else:
+        k1, k2, p1, p2, k3, k4, k5, k6 = distortion_coeffs.reshape(-1)
+
+    # Convert distorted pixels → normalized distorted coords
+    xd = (distorted_points[:, 0] - cx) / fx
+    yd = (distorted_points[:, 1] - cy) / fy
+
+    # Initial guess: assume no distortion
+    x = xd.copy()
+    y = yd.copy()
+
+    for _ in range(max_iter):
+
+        r2 = x * x + y * y
+        r4 = r2 * r2
+        r6 = r4 * r2
+
+        radial = (1 + k1*r2 + k2*r4 + k3*r6) / (1 + k4*r2 + k5*r4 + k6*r6)
+
+        x_tan = 2*p1*x*y + p2*(r2 + 2*x*x)
+        y_tan = p1*(r2 + 2*y*y) + 2*p2*x*y
+
+        # forward-distorted estimate of (x,y)
+        x_est = x * radial + x_tan
+        y_est = y * radial + y_tan
+
+        # update using difference between predicted and actual distorted
+        dx = xd - x_est
+        dy = yd - y_est
+
+        x += dx
+        y += dy
+
+        if np.max(np.abs(dx)) < eps and np.max(np.abs(dy)) < eps:
+            break
+
+    # convert normalized → pixel units
+    undistorted = np.zeros_like(distorted_points)
+    undistorted[:, 0] = x * fx + cx
+    undistorted[:, 1] = y * fy + cy
+    return undistorted.reshape(init_shape)
+
+
 
 def invert_distortion_maps(map_u, map_v, n_iterations=100, decay=0.9):
     """

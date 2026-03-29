@@ -101,7 +101,7 @@ class OverlayedMesh:
         raycasting_scene.add_triangles(o3d.t.geometry.TriangleMesh.from_legacy(self.mesh))
 
         rays = np.zeros((points.shape[0], 6), dtype=np.float32)
-        dirn = camera.p - points
+        dirn = camera.position - points
         p = points + 0.005 * dirn
         rays[:, :3] = p
         rays[:, 3:] = dirn

@@ -28,8 +28,8 @@ class PinholeCamera:
         self.camera_matrix = np.copy(camera_matrix)
         self.distortion_coeffs = np.copy(distortion_coeffs)
         self.xres, self.yres = res
-        self.p = np.copy(p)
-        self.r = np.copy(r)
+        self.position = np.copy(p)
+        self.rotation = np.copy(r)
 
     def deproject_to_3d_vector(self, points: np.ndarray, apply_undistortion=True, normalise=True) -> NDArray:
         """
@@ -41,7 +41,7 @@ class PinholeCamera:
         """
         if apply_undistortion:
             points = self.undistort_points(points)
-        return deproject_to_3d_vector(points, self.r, self.camera_matrix, normalise=normalise)
+        return deproject_to_3d_vector(points, self.rotation, self.camera_matrix, normalise=normalise)
 
     def project_points_to_2d(self, points: NDArray, return_distorted=True, return_as_int=False):
         """
@@ -51,7 +51,7 @@ class PinholeCamera:
         :param return_as_int: return as integers
         :return:
         """
-        points = project_points_to_2d(points, self.p, self.r, self.camera_matrix)
+        points = project_points_to_2d(points, self.position, self.rotation, self.camera_matrix)
         if return_distorted:
             points = self.distort_points(points)
         if return_as_int:
@@ -127,7 +127,7 @@ class PinholeCamera:
         """
         if y is None:
             _, y, _ = self.axes()
-        self.r = lookpos_to_rotation_matrix(self.p, lookpos, y)
+        self.rotation = lookpos_to_rotation_matrix(self.position, lookpos, y)
 
 
     def generate_rays(self, apply_undistortion=True, direction_only=False, normalise=True, pixel_coords = None) -> NDArray:
@@ -140,7 +140,7 @@ class PinholeCamera:
         """
         if pixel_coords is None:
             xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
-            pixel_coords = np.zeros((*xx.shape, 2), dtype=np.float32)
+            pixel_coords = np.zeros((*xx.shape, 2), dtype=np.float64)
             pixel_coords[:, :, 0] = xx
             pixel_coords[:, :, 1] = yy
         init_shape = pixel_coords.shape[:-1]
@@ -152,7 +152,7 @@ class PinholeCamera:
             rays = pixel_direction
         else:
             rays = np.zeros((pixel_coords.shape[0], 6), dtype=np.float32)
-            rays[:, :3] = self.p
+            rays[:, :3] = self.position
             rays[:, 3:] = pixel_direction
         rays = rays.reshape(*init_shape, -1)
         return rays
@@ -165,17 +165,17 @@ class PinholeCamera:
         if mode == 'absolute':
             r = euler_angles_to_rotation_matrix(angles, degrees=degrees)
         else:
-            euler_angles = rotation_matrix_to_euler_angles(self.r, degrees=degrees)
+            euler_angles = rotation_matrix_to_euler_angles(self.rotation, degrees=degrees)
             euler_angles += angles
             r = euler_angles_to_rotation_matrix(euler_angles, degrees=degrees)
-        self.r = r
+        self.rotation = r
 
     def set_pos(self, pos: NDArray, mode = 'absolute'):
         assert(mode == 'absolute' or mode == 'relative')
         if mode == 'absolute':
-            self.p = pos
+            self.position = pos
         else:
-            self.p += pos
+            self.position += pos
 
     def hfov(self):
         return focal_length_to_fov(self.fx(), self.xres)
@@ -207,10 +207,10 @@ class PinholeCamera:
 
     def lookpos(self):
         _, _, z_axis = self.axes()
-        return self.p + z_axis
+        return self.position + z_axis
 
     def axes(self):
-        axes = rotation_matrix_to_axes(self.r)
+        axes = rotation_matrix_to_axes(self.rotation)
         return axes
 
     def up(self):
@@ -218,8 +218,8 @@ class PinholeCamera:
 
     def extrinsics(self):
         dst = np.eye(4)
-        dst[:3, :3] = self.r
-        dst[3, :3] = self.p
+        dst[:3, :3] = self.rotation
+        dst[3, :3] = self.position
         return dst
 
     def meshgrid(self):
@@ -257,4 +257,4 @@ class PinholeCamera:
             return distance / self.fx()
 
     def find_camera_pose_from_pnp(self, object_points: NDArray, image_points: NDArray):
-        self.p, self.r = find_camera_pose_from_pnp(self.camera_matrix, object_points, image_points, self.distortion_coeffs)
+        self.position, self.rotation = find_camera_pose_from_pnp(self.camera_matrix, object_points, image_points, self.distortion_coeffs)

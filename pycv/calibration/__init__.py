@@ -1,3 +1,3 @@
-from .camera_calibration import CalibrationTarget, CameraCalibration, find_checkerboard_corners, find_circles_grid
+from .camera_calibration import CalibrationTarget, CameraCalibration, find_checkerboard_corners, find_circles_grid, rms_between_image_points
 from .fitted_camera_calibration import FittedCameraCalibration
 from .visualiation import visualise_distortion

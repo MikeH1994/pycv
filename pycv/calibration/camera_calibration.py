@@ -7,7 +7,7 @@ from numpy.typing import NDArray
 import matplotlib.pyplot as plt
 import pickle
 import pycv
-from pycv.core import convert_to_8_bit
+from pycv.core import convert_to_8_bit, rms
 from pycv.constants import *
 from pycv.pinholecamera import PinholeCamera
 from pycv.pinholecamera import unpack_camera_matrix, distortion_coefficients_to_dict
@@ -76,7 +76,8 @@ class CameraCalibration:
         if target.board_type == CALIB_BOARD_TYPE_CHECKERBOARD:
             success, image_points, overlayed_image = find_checkerboard_corners(img, target.board_size, create_image=display)
         else:
-            success, image_points, overlayed_image = find_circles_grid(img, target, create_image=display)
+            success, image_points, overlayed_image = find_circles_grid(img, target.board_size, create_image=display,
+                                                                       grid_type=target.grid_type)
         if success:
             self.image_points_per_frame.append(image_points)
             self.object_points_per_frame.append(target.object_points.astype(np.float32))
@@ -90,6 +91,8 @@ class CameraCalibration:
 
         if verbose:
             print(f"    Device: {self.device_name} Calibration point: {key} Status: {success}")
+        return success
+
 
     def calibrate(self, alpha: float = None, calibration_flags: int = None, verbose=False, init_camera_matrix=None, init_distortion_coeffs=None):
         calibration_flags = self.default_calibration_flags if calibration_flags is None else calibration_flags
@@ -229,6 +232,8 @@ def create_calibration_target_object_points(board_size: Tuple[int, int], dx: flo
 
 
 def find_circles_grid(img, board_size, use_larger_blobs=False, create_image=True, grid_type=cv2.CALIB_CB_SYMMETRIC_GRID):
+    if img.dtype != np.uint8:
+        img = convert_to_8_bit(img)
     if use_larger_blobs:
         params = cv2.SimpleBlobDetector_Params()
         params.maxArea = 1e5
@@ -252,8 +257,8 @@ def find_checkerboard_corners(img, board_size: Tuple[int, int], create_image: bo
     img8 = img if img.dtype == np.uint8 else convert_to_8_bit(img)
     success, corners = cv2.findChessboardCornersSB(img8, board_size, flags=cv2.CALIB_CB_EXHAUSTIVE)
 
-    if success is True:
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 1e-8)
+    if success:
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 500, 1e-8)
         corners = cv2.cornerSubPix(img, corners, winSize=winSize, zeroZone=zeroZone, criteria=criteria)
 
     overlayed_image = None
@@ -261,3 +266,18 @@ def find_checkerboard_corners(img, board_size: Tuple[int, int], create_image: bo
         img_rgb = pycv.to_rgb(img8)
         overlayed_image = cv2.drawChessboardCorners(img_rgb, board_size, corners, success)
     return success, corners, overlayed_image
+
+def reorder_image_points(image_points, board_size):
+    # if first point is further to the right than the last point,
+    # points are reversed
+    board_width, board_height = board_size
+    for i0 in range(0, board_width*board_height, board_width):
+        i1 = i0 + board_width - 1
+        if image_points[i0][0] > image_points[i1][0]:
+            image_points[i0:i1+1, :] = image_points[i0:i1+1, :][::-1, :]
+    return image_points
+
+def rms_between_image_points(image_points_1, image_points_2, board_size):
+    image_points_1 = reorder_image_points(image_points_1, board_size)
+    image_points_2 = reorder_image_points(image_points_2, board_size)
+    return rms(image_points_1-image_points_2)
