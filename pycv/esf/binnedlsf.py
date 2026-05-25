@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.typing import NDArray
 from typing import Union, Dict
-from scipy.interpolate import InterpolatedUnivariateSpline
+from scipy.interpolate import InterpolatedUnivariateSpline, UnivariateSpline
 import matplotlib.pyplot as plt
 from pycv.utils.matlab import matlab_round
 from pycv.esf.lsf import LSF
@@ -51,3 +51,13 @@ class BinnedLSF(LSF):
         n_outputted_frequencies = matlab_round(mtf.shape[0] * freq_lim / 2)
         mtf = mtf[:n_outputted_frequencies]
         return MTF(mtf)
+
+    def fwhm(self):
+        max_val = np.max(self.f_data)
+        spline_offset = UnivariateSpline(self.x_data, self.f_data - 0.5 * max_val, k=3, s=0, ext="zeros")
+
+        roots = spline_offset.roots()
+        if len(roots) != 2:
+            raise Exception(f"Expected 2 roots- found {len(roots)}")
+        fwhm = np.abs(roots[1] - roots[0])
+        return fwhm

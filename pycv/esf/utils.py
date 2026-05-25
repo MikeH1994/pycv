@@ -2,7 +2,7 @@ from numpy.typing import NDArray
 import numpy as np
 from scipy.integrate import simpson
 from scipy.optimize import curve_fit
-from pycv.slantededge import fermi_function
+from pycv.edge import fermi_function
 
 
 

@@ -15,8 +15,8 @@ class LSF(Metric):
         wflag = kwargs["wflag"] if "wflag" in kwargs else 0
         normalise = kwargs["normalise"] if "normalise" in kwargs else True
 
-        self.x_data = x_data
-        self.f_data = f_data
+        self.x_data = np.copy(x_data)
+        self.f_data = np.copy(f_data)
         self.default_x_label = "Distance to edge (px)"
         self.default_y_label = "LSF"
         self.params = None

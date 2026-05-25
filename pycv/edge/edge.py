@@ -6,10 +6,10 @@ from .core import get_edge_points
 
 
 class Edge:
-    def __init__(self, img: NDArray):
+    def __init__(self, img: NDArray, edge_detection_mode="fit_esf"):
         self.img = np.copy(img)
 
-        self.edge_x_loc, self.edge_y_loc = get_edge_points(img)
+        self.edge_x_loc, self.edge_y_loc = get_edge_points(img, edge_detection_mode=edge_detection_mode)
         self.poly = np.polynomial.polynomial.polyfit(self.edge_x_loc, self.edge_y_loc, 1)
         self.angle = np.degrees(np.arctan(self.poly[1]))
         self.m = self.poly[1]

@@ -1,4 +1,7 @@
 from __future__ import annotations
+
+import numpy as np
+
 from pycv.esf.esf import ESF
 from numpy.typing import NDArray
 from typing import Union
@@ -7,7 +10,7 @@ from scipy.interpolate import InterpolatedUnivariateSpline
 import matplotlib.pyplot as plt
 from pycv.esf.binnedlsf import BinnedLSF
 from pycv.utils.settings import ESFSettings
-
+from copy import deepcopy
 
 class BinnedESF(ESF):
     def __init__(self, x_data: NDArray, f_data: NDArray, esf_settings: ESFSettings = ESFSettings()):
@@ -24,8 +27,8 @@ class BinnedESF(ESF):
     def f(self, x: Union[NDArray, float]) -> Union[NDArray, float]:
         return self.interpolation_fn(x)
 
-    def lsf(self, **kwargs) -> BinnedLSF:
-        return BinnedLSF(self.data, **kwargs)
+    def lsf(self,) -> BinnedLSF:
+        return BinnedLSF(deepcopy(self.data))
 
     def normalise_data(self):
         raise Exception("Base function ESF.lsf() called")

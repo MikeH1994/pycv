@@ -25,6 +25,8 @@ def get_edge_points_from_centroid(img: NDArray, derivative_filter: NDArray, wfla
     # smoothing window for first part of edge location estimation
     win1 = get_window(width, (width-1)/2, wflag, alpha)
 
+    derivative_filter = get_derivative_filters(img, 3)
+
     # compute initial edge location and fitting
     lsf = deriv1(img[:, :], derivative_filter)
 

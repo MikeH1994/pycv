@@ -6,7 +6,7 @@ from scipy.integrate import simpson
 import scipy.interpolate
 from scipy.interpolate import RectBivariateSpline
 from pycv.metrics.metric import Metric
-from pycv.lsf import LSF
+from pycv.esf import LSF
 from typing import Tuple
 
 

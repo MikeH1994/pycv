@@ -1,8 +1,7 @@
 import numpy as np
 from typing import Tuple
 from numpy.typing import NDArray
-from pycv.slantededge import edge_is_vertical, rotate_image
-from pycv.slantededge.utils import get_edge_points_from_esf_fit,  get_edge_points_from_lsf_fit, get_edge_points_from_centroid
+from .utils import get_edge_points_from_esf_fit,  get_edge_points_from_lsf_fit, get_edge_points_from_centroid, edge_is_vertical, rotate_image
 
 
 def get_edge_points(img: NDArray, edge_detection_mode="fit_esf", **kwargs) -> Tuple[np.ndarray, np.ndarray]:

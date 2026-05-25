@@ -1,4 +1,5 @@
 from .esf import ESF
+from .lsf import LSF
 from .binnedesf import BinnedESF
 from .fittedesf import GaussianESF
 from .binnedlsf import BinnedLSF

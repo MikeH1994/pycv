@@ -1,13 +1,17 @@
 from __future__ import annotations
+
+from scipy.interpolate import UnivariateSpline
+
 from pycv.esf.lsf import LSF
 from scipy.optimize import curve_fit
 from numpy.typing import NDArray
 from typing import Union
 import numpy as np
 import matplotlib.pyplot as plt
+
+from pycv.psf.radialpsf import RadialPSF
 from pycv.utils.settings import FittingParams
 from pycv.utils.maths import calculate_fwhm
-
 
 
 class FittedLSF(LSF):
@@ -87,7 +91,39 @@ class GaussianLSF(FittedLSF):
     """def esf(self) -> GaussianESF:
         return GaussianESF()"""
 
-    """def psf(self, **kwargs) -> GaussianPSF:
+    def psf(self, **kwargs) -> GaussianPSF:
         height = 21 if "height" not in kwargs else kwargs["height"]
         width = 21 if "width" not in kwargs else kwargs["width"]
-        return GaussianPSF(self, width, height)"""
+        return GaussianPSF(self, width, height)
+
+
+class GaussianPSF(RadialPSF):
+    def __init__(self, lsf: GaussianLSF, width: int, height: int):
+        super().__init__(lsf, width, height)
+
+    @staticmethod
+    def fn(r, *params):
+        if len(params) % 2 != 0:
+            raise ValueError("In fn_PSF: the number of terms in the function must be even")
+        f = 0.0
+        for i in range(len(params) // 2):
+            a_i = params[i * 2]
+            b_i = params[i * 2 + 1]
+            f += 2.0 / np.pi * a_i / b_i ** 2 * np.exp(-r**2 / b_i ** 2)
+        return f
+
+    def fwhm(self, min_x = -10, max_x = 10):
+        x = np.linspace(min_x, max_x, 10000)
+        f = self.f(x, 0)
+
+        plt.plot(x, f)
+        plt.show()
+
+        max_val = np.max(f)
+        spline_offset = UnivariateSpline(x, f - 0.5 * max_val, k=3, s=0, ext="zeros")
+
+        roots = spline_offset.roots()
+        if len(roots) != 2:
+            raise Exception(f"Expected 2 roots- found {len(roots)}")
+        fwhm = np.abs(roots[1] - roots[0])
+        return fwhm

@@ -3,7 +3,7 @@ import pycv.core
 import pycv.imageutils
 import pycv.metrics
 import pycv.pinholecamera
-import pycv.meshes
+# import pycv.meshes
 import pycv.utils
 import pycv.radiometry
 import pycv.maths

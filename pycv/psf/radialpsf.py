@@ -3,7 +3,7 @@ from numpy.typing import NDArray
 import numpy as np
 from scipy.integrate import dblquad
 from .psf import PSF
-from pycv.lsf import LSF
+from pycv.esf import LSF
 from .utils import kernel_to_interpolation_fn
 
 
