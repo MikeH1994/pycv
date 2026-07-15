@@ -13,13 +13,32 @@ def save_current_fig(fpath, verbose=False, dpi=120, tight_layout=True, size_inch
     figure = plt.gcf()
     figure.set_size_inches(*size_inches)
     parent_dir = os.path.dirname(fpath)
-    if not os.path.exists(parent_dir):
+    if parent_dir != "" and not os.path.exists(parent_dir):
         os.mkdir(parent_dir)
         if verbose:
             print(f"Created {parent_dir}")
     plt.savefig(fpath, dpi=dpi)
     if verbose:
         print(f"saved {fpath}")
+
+
+
+def plt_fig_to_rgb(fig=None):
+
+    if fig is None:
+        fig = plt.gcf()
+
+    fig.canvas.draw()
+
+    # Get RGBA buffer directly
+    buf = np.asarray(fig.canvas.buffer_rgba())
+
+    # Drop alpha channel
+    rgb = buf[:, :, :3]
+
+    return rgb.copy()  # ensure contiguous
+
+
 
 
 def set_labels_and_legend(title, xlabel, ylabel, title_fontsize=20, label_fontsize=18, legend_fontsize=16,

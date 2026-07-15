@@ -1,1 +1,1 @@
-import pycv.algorithms.algorithms
+import pycv.algorithms.pinholepsfcalculation

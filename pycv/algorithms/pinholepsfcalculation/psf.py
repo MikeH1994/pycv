@@ -18,8 +18,8 @@ class PSF:
     def integral_over_circle(self, x: np.ndarray, y: np.ndarray, r: float):
         I = np.zeros_like(x)
         for i in range(self.n_terms):
-            a, b, dx, dy = self.params[i]
-            I += self.eval_integral_over_circle(a, b, x + dx, y + dy, r)
+            a, sigma, dx, dy = self.params[i]
+            I += self.eval_integral_over_circle(a, sigma, x + dx, y + dy, r)
         return I
 
     def integral_over_circle_numeric(self, x, y, r, n_samples=5000):
@@ -40,8 +40,8 @@ class PSF:
     def integral_over_infinity(self):
         I = 0
         for i in range(self.n_terms):
-            a, b, _, _ = self.params[i]
-            I += self.eval_integral_over_infinity(a, b)
+            a, sigma = self.params[i][:2]
+            I += self.eval_integral_over_infinity(a, sigma)
         return I
 
     def integral_over_infinity_numeric(self, n_samples=10000, width=100):

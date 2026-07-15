@@ -5,6 +5,48 @@ import numpy as np
 from numpy.typing import NDArray
 
 
+def write_avi(frames, output_path, fps=30):
+    """
+    Write a list of RGB numpy arrays to an AVI video file.
+
+    Parameters
+    ----------
+    frames : list of np.ndarray
+        List of images with shape (H, W, 3) in RGB format.
+    output_path : str
+        Path to output AVI file.
+    fps : int
+        Frames per second.
+
+    Returns
+    -------
+    None
+    """
+    if len(frames) == 0:
+        raise ValueError("Frame list is empty.")
+
+    # Ensure all frames have the same size
+    h, w = frames[0].shape[:2]
+
+    # Define codec (XVID is widely compatible)
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    writer = cv2.VideoWriter(output_path, fourcc, fps, (w, h))
+
+    for i, frame in enumerate(frames):
+        if len(frame.shape) == 2:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+
+        if frame.shape != (h, w, 3):
+            raise ValueError(f"Frame {i} has inconsistent shape {frame.shape}")
+
+        # Convert RGB → BGR (OpenCV expects BGR)
+        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+
+        writer.write(frame_bgr)
+
+    writer.release()
+
+
 def convert_to_8_bit(src: NDArray, min_val=None, max_val=None, return_as_rgb=False):
     # if a single image is supplied
     if src.dtype == np.uint8:

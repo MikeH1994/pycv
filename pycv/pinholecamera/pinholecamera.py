@@ -31,6 +31,9 @@ class PinholeCamera:
         self.position = np.copy(p)
         self.rotation = np.copy(r)
 
+    def projected_pixel_width_at_distance(self, distance):
+        return distance / self.fx()
+
     def deproject_to_3d_vector(self, points: np.ndarray, apply_undistortion=True, normalise=True) -> NDArray:
         """
 

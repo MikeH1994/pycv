@@ -4,3 +4,4 @@ from .utils import create_interpolated_image, gaussian_knn, wiener_deconv
 from .utils import undo_pixelisation, create_interpolated_image
 from .optimisation import calculate_psf, calculate_brightness
 from .psf import PSF
+from .visualisation import show_interpolated_image, show_video, plot_pixel_values, create_simulated_image
