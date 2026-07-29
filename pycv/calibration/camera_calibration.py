@@ -1,5 +1,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from operator import truediv
+
 import cv2
 import numpy as np
 from typing import Tuple, Union, List, Any
@@ -13,6 +15,9 @@ from pycv.pinholecamera import PinholeCamera
 from pycv.pinholecamera import unpack_camera_matrix, distortion_coefficients_to_dict
 import json
 import os
+from pycv.imageutils.imagetransformation import ImageTransformation
+from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cdist
 
 class CalibrationTarget:
     board_size: Union[Tuple[int, int]] = None
@@ -28,14 +33,19 @@ class CalibrationTarget:
         self.board_type: int = board_type
         if board_type == CALIB_BOARD_TYPE_CHECKERBOARD or board_type == CALIB_BOARD_TYPE_CIRCLE_GRID_SYMMETRIC:
             self.grid_type = cv2.CALIB_CB_SYMMETRIC_GRID
+            self.object_points: NDArray = create_symmetric_grid_object_points(self.board_size, self.grid_width,
+                                                                              self.grid_height)
         elif board_type == CALIB_BOARD_TYPE_CIRCLE_GRID_ASYMMETRIC:
             self.grid_type = cv2.CALIB_CB_ASYMMETRIC_GRID
+            self.object_points: NDArray = create_asymmetric_grid_object_points(board_size, self.grid_width, self.grid_height)
         else:
             raise Exception("Unknown board type supplied")
-        self.object_points: NDArray = create_calibration_target_object_points(self.board_size, self.grid_width, self.grid_height)
 
     def get_object_points(self, pos=np.array([0, 0, 0]), rot=np.eye(3)) -> NDArray:
         return self.object_points @ rot.T + pos
+
+    def n_features(self):
+        return self.object_points.reshape(-1, 3).shape[0]
 
 class CameraCalibration:
     default_calibration_flags: int = cv2.CALIB_FIX_K4 | cv2.CALIB_FIX_K5 | cv2.CALIB_FIX_K6 | cv2.CALIB_FIX_ASPECT_RATIO | cv2.CALIB_FIX_TANGENT_DIST
@@ -62,7 +72,7 @@ class CameraCalibration:
         self.target_rotations = []
         self.device_name = device_name
 
-    def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None, display=False, verbose=False):
+    def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None, detected_features=None, display=False, verbose=False):
         key = len(self.image_keys) if key is None else key
         assert(key not in self.image_keys), "Key already exists!"
         xy_image_size = img.shape[:2][::-1]
@@ -73,11 +83,19 @@ class CameraCalibration:
         assert(self.image_size == xy_image_size), "Dimensions of image do not match previous calibration point-\n" \
                                                       "current: {} stored: {}".format(xy_image_size, self.image_size)
         self.n_frames += 1
-        if target.board_type == CALIB_BOARD_TYPE_CHECKERBOARD:
-            success, image_points, overlayed_image = find_checkerboard_corners(img, target.board_size, create_image=display)
+        if detected_features is None:
+            if target.board_type == CALIB_BOARD_TYPE_CHECKERBOARD:
+                success, image_points, overlayed_image = find_checkerboard_corners(img, target.board_size, create_image=display)
+            else:
+                success, image_points, overlayed_image = find_circles_grid(img, target.board_size, create_image=display,
+                                                                           grid_type=target.grid_type)
         else:
-            success, image_points, overlayed_image = find_circles_grid(img, target.board_size, create_image=display,
-                                                                       grid_type=target.grid_type)
+            success = True
+            img8 = convert_to_8_bit(img)
+            image_points = detected_features
+            img_rgb = pycv.to_rgb(img8)
+            overlayed_image = cv2.drawChessboardCorners(img_rgb, target.board_size, image_points, True)
+
         if success:
             self.image_points_per_frame.append(image_points)
             self.object_points_per_frame.append(target.object_points.astype(np.float32))
@@ -214,7 +232,7 @@ class CameraCalibration:
         dist_coeffs = self.distortion_coeffs if include_distortion else np.zeros(5)
         return PinholeCamera(self.camera_matrix, self.image_size, distortion_coeffs=dist_coeffs)
 
-def create_calibration_target_object_points(board_size: Tuple[int, int], dx: float, dy = None):
+def create_symmetric_grid_object_points(board_size: Tuple[int, int], dx: float, dy = None):
     """
     Creates a grid calibration target
     :param board_size: a tuple of the form (width, height),
@@ -230,6 +248,23 @@ def create_calibration_target_object_points(board_size: Tuple[int, int], dx: flo
             object_points.append([i * dx, j * dy, 0.0])
     return np.array(object_points)
 
+def create_asymmetric_grid_object_points(board_size: Tuple[int, int], dx: float, dy = None):
+    """
+    Creates a grid calibration target
+    :param board_size: a tuple of the form (width, height),
+        containing the dimension of the grid
+    :param dx: the distance between each point on the grid
+    :return:
+    """
+    width, height = board_size
+    dy = 0.5*dx if dy is None else dy
+    object_points = []
+    for j in range(height):
+        n_features_this_row = width if j % 2 == 0 else width - 1
+        offset = 0 if j % 2 == 0 else 0.5*dx
+        for i in range(n_features_this_row):
+            object_points.append([offset + i * dx, j * dy, 0.0])
+    return np.array(object_points)
 
 def find_circles_grid(img, board_size, use_larger_blobs=False, create_image=True, grid_type=cv2.CALIB_CB_SYMMETRIC_GRID):
     if img.dtype != np.uint8:
@@ -267,17 +302,41 @@ def find_checkerboard_corners(img, board_size: Tuple[int, int], create_image: bo
         overlayed_image = cv2.drawChessboardCorners(img_rgb, board_size, corners, success)
     return success, corners, overlayed_image
 
-def reorder_image_points(image_points, board_size):
-    # if first point is further to the right than the last point,
-    # points are reversed
-    board_width, board_height = board_size
-    for i0 in range(0, board_width*board_height, board_width):
-        i1 = i0 + board_width - 1
-        if image_points[i0][0] > image_points[i1][0]:
-            image_points[i0:i1+1, :] = image_points[i0:i1+1, :][::-1, :]
-    return image_points
-
 def rms_between_image_points(image_points_1, image_points_2, board_size):
     image_points_1 = reorder_image_points(image_points_1, board_size)
     image_points_2 = reorder_image_points(image_points_2, board_size)
     return rms(image_points_1-image_points_2)
+
+def create_bbox(pts):
+    rect = cv2.minAreaRect(pts.astype(np.float32))
+    bbox_pts = np.asarray(cv2.boxPoints(rect))
+
+    # top-left has smallest x+y
+    # bottom-right has largest x+y
+    s = bbox_pts.sum(axis=1)
+    tl = bbox_pts[np.argmin(s)]
+    br = bbox_pts[np.argmax(s)]
+
+    # top-right has smallest y-x
+    # bottom-left has largest y-x
+    diff = bbox_pts[:, 1] - bbox_pts[:, 0]
+    tr = bbox_pts[np.argmin(diff)]
+    bl = bbox_pts[np.argmax(diff)]
+
+    return np.array([tl, tr, br, bl])
+
+def reorder_image_points(pts, pts_tgt):
+    pts_tgt = pts_tgt.reshape(-1, pts_tgt.shape[-1])[:, :2]
+    bbox = create_bbox(pts)
+    bbox_tgt = create_bbox(pts_tgt)
+    src_size = (320, 320) # (int(np.max(bbox[:, 0]) - np.min(bbox[:, 0])), int(np.max(bbox[:, 1]) - np.min(bbox[:, 1])))
+    dst_size = (320, 320) # (int(np.max(pts_tgt[:, 0])), int(np.max(pts_tgt[:, 1])))
+
+    transform = ImageTransformation.crop_and_align_image(bbox, bbox_tgt, src_size, dst_size)
+    pts_transformed = transform.transform_points(pts)
+    idx1, idx2 = linear_sum_assignment(cdist(pts_tgt, pts_transformed))
+
+    pts_ordered = []
+    for idx in idx2:
+        pts_ordered.append(pts[idx, :])
+    return np.array(pts_ordered)

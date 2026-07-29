@@ -69,14 +69,14 @@ def draw_text(x, y, text):
         )
     )
 
-def set_colorbar(tick_position = None, label=None, label_fontsize=18, tick_fontsize=16, plot=None):
+def set_colorbar(tick_position = None, label=None, label_fontsize=18, tick_fontsize=16, plot=None, shrink=1.0):
     ax = plt.gca()
 
     if plot is None:
         plot = [child for child in ax.get_children()
                    if isinstance(child, (AxesImage, PathCollection, Line2D))][-1]
 
-    cbar = plt.colorbar(plot, ax=ax)
+    cbar = plt.colorbar(plot, ax=ax, shrink=shrink)
     if tick_position is not None:
         cbar.set_ticks(tick_position)
     if label is not None:

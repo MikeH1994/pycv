@@ -35,14 +35,10 @@ def create_background(bkg_image: np.ndarray, centre: Tuple[float, float], radian
     return InterpolatedImage(roi, x, y)
 
 
-
 def gaussian_2d(coords, x0, y0, A, sigma, B):
     xx, yy = coords
     r2 = (xx - x0)**2 + (yy - y0)**2
     return (A * np.exp(-r2 / (2 * sigma**2)) + B).reshape(-1)
-
-
-
 
 
 def find_aperture(
@@ -147,9 +143,7 @@ def find_aperture(
                 bounds=bounds,
                 maxfev=5000,
             )
-
             dx_fit, dy_fit, _, _, _ = popt
-
         except RuntimeError:
             # fallback: center of mass
             weights = roi
