@@ -65,7 +65,7 @@ class PSF:
             # partial derivative wrt k_i
             gradients[2 + 4*i] = 2 * np.pi * sigma ** 2 * F2
             # partial derivative wrt sigma_i
-            gradients[2 + 4*i + 1] = 4 * np.pi * k * sigma * (F2 - a * p - lam * F_lambda),
+            gradients[2 + 4*i + 1] = 4 * np.pi * k * sigma * (F2 - a * p - lam * F_lambda)
             # x_i
             gradients[2 + 4*i + 2] = 4 * np.pi * k * (x + x0) * F_lambda
             # y_i

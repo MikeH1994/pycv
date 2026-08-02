@@ -5,6 +5,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 import pycv
+from . import scale_camera_matrix
 from .interpolateddistortionmap import InterpolatedDistortionMap
 from .pinholecameramaths import deproject_to_3d_vector, project_points_to_2d, find_camera_pose_from_pnp, \
     rotation_matrix_to_axes, distort_points, undistort_points
@@ -12,7 +13,7 @@ from .pinholecameramaths import focal_length_to_fov, unpack_camera_matrix, lookp
 from ..core import rotation_matrix_to_euler_angles, euler_angles_to_rotation_matrix
 from ..core import unstack
 from ..imageutils import InterpolatedImage
-
+import math
 
 class PinholeCamera:
     def __init__(self, camera_matrix: NDArray, res: Tuple[int, int], distortion_coeffs: NDArray = np.zeros(5),
@@ -30,6 +31,20 @@ class PinholeCamera:
         self.xres, self.yres = res
         self.position = np.copy(p)
         self.rotation = np.copy(r)
+
+    def rescale(self, sx, sy = None):
+        if sy is None:
+            sy = sx
+        self.camera_matrix = scale_camera_matrix(self.camera_matrix, sx, sy)
+        new_width = self.xres * sx
+        new_height = self.yres * sy
+
+        if not math.isclose(new_width, round(new_width)) or not math.isclose(new_height, round(new_height)):
+            raise Exception(f"New resolution does not scale to an integer - {self.xres}x{self.yres} to {new_width}x{new_height}")
+
+        self.xres = int(new_width)
+        self.yres = int(new_height)
+
 
     def projected_pixel_width_at_distance(self, distance):
         return distance / self.fx()

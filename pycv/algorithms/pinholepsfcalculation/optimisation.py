@@ -84,8 +84,8 @@ def loss_fn(X, meas, x_samples, y_samples, background: InterpolatedImage, fix_po
     psf = PSF(psf_params, fix_position=fix_position)
     calc = np.mean(calculate_brightness(x_samples, y_samples, psf, ap_radius, l_em, l_bkg), axis=-1)
     mse = np.mean((meas - calc) ** 2)
+    mae = np.mean(np.abs((meas - calc)))
 
-    n_params = X.shape[0]
     # f = D_ap * l_em + (D_inf - D_ap) * l_bkg
     # where D_ap = integral_over_circle() and D_inf = integral_over_infinity()
     # jacobian = 1/n*(f-meas)*df/d\theta_i, where \theta_i is the i-th parameter
@@ -96,17 +96,19 @@ def loss_fn(X, meas, x_samples, y_samples, background: InterpolatedImage, fix_po
     # gradients in D_inf have shape (n_params, 1)
     grad_D_inf = psf.integral_over_infinity_derivative().reshape(-1, 1, 1)
     # the gradients of all parameters (except for L_em) can be calculated as
-    jacobian = grad_D_ap * l_em + (grad_D_inf - grad_D_ap)*l_bkg
+    dfdtheta = np.mean((grad_D_ap * l_em + (grad_D_inf - grad_D_ap)*l_bkg), axis=-1)
+    dfdtheta[1] = np.mean(psf.integral_over_circle(x_samples, y_samples, ap_radius), axis=-1)
+    jacobian = np.mean((calc-meas)*dfdtheta, axis=-1)
 
     if pbar is not None:
-        if mse < pbar.best_loss:
-            pbar.best_loss = mse
+        if mae < pbar.best_loss:
+            pbar.best_loss = mae
         pbar.update(1)
-        pbar.set_description(f"    {pbar.title} best loss = {pbar.best_loss:.4E}, n samples = {x_samples.shape[0]}, n subsamples = {x_samples.shape[1]} - ")
-    return mse
+        pbar.set_description(f"    {pbar.title} best MAE = {pbar.best_loss:.4E}, n samples = {x_samples.shape[0]}, n subsamples = {x_samples.shape[1]} - ")
+    return mse, jacobian
 
 def calculate_psf(tgt_points, x, y, background:InterpolatedImage, show_progress_bar=True, n_terms=3, n_subsamples=100,
-                  n_subsamples_coarse=50, rng_seed=12345, coarse_subsample_ratio=0.1, full_subsample_ratio=1.0,
+                  n_subsamples_coarse=50, rng_seed=12345, coarse_subsample_ratio=1.0, full_subsample_ratio=1.0,
                   fix_position=False):
     psf_params = default_params(n_terms=n_terms, fix_position=fix_position)
     bounds = default_bounds(n_terms=n_terms, fix_position=fix_position)
@@ -129,7 +131,7 @@ def calculate_psf(tgt_points, x, y, background:InterpolatedImage, show_progress_
         y = y_full[subsample_indices]
         tgt_points = tgt_points_full[subsample_indices]
 
-        # intensity_scatterplot(x, y, tgt_points)
+        intensity_scatterplot(x, y, tgt_points)
 
         x_samples = np.zeros((x.shape[0], n_s)) + x + subsamples[:, 0]
         y_samples = np.zeros((y.shape[0], n_s)) + y + subsamples[:, 1]
@@ -143,7 +145,7 @@ def calculate_psf(tgt_points, x, y, background:InterpolatedImage, show_progress_
         pbar.title = ["Coarse fit:", "Full fit:  "][run_index]
         pbar.best_loss = np.inf
         result = minimize(loss_fn, psf_params, args=(tgt_points, x_samples, y_samples, background, fix_position, pbar),
-                              options=options, method="BFGS")
+                              options=options, method="BFGS", jac=True)
         psf_params = result.x
         pbar.close()
         background.scale_image(k)

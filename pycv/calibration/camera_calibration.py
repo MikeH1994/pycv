@@ -60,6 +60,7 @@ class CameraCalibration:
     rvecs: Union[List[NDArray]] = None
     tvecs: Union[List[NDArray]] = None
     rms: float = 0.0
+    rms_rpe: float = 0.0
     n_frames: int = 0
     n_frames_failed: int = 0
     parameter_errors = {}
@@ -72,7 +73,8 @@ class CameraCalibration:
         self.target_rotations = []
         self.device_name = device_name
 
-    def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None, detected_features=None, display=False, verbose=False):
+    def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None,
+                              detected_features=None, display=False, verbose=False, blob_detector=None):
         key = len(self.image_keys) if key is None else key
         assert(key not in self.image_keys), "Key already exists!"
         xy_image_size = img.shape[:2][::-1]
@@ -88,7 +90,7 @@ class CameraCalibration:
                 success, image_points, overlayed_image = find_checkerboard_corners(img, target.board_size, create_image=display)
             else:
                 success, image_points, overlayed_image = find_circles_grid(img, target.board_size, create_image=display,
-                                                                           grid_type=target.grid_type)
+                                                                           grid_type=target.grid_type, blob_detector=blob_detector)
         else:
             success = True
             img8 = convert_to_8_bit(img)
@@ -171,12 +173,14 @@ class CameraCalibration:
         return cv2.undistort(img, self.camera_matrix, self.distortion_coeffs)
 
     def compute_reprojection_error(self):
-        mean_error = 0
-        """for i in range(len(self.object_points_per_frame)):
-            imgpoints2, _ = cv2.projectPoints(self.object_points_per_frame[i], rvecs[i], tvecs[i], self.camera_matrix, self.distortion_coeffs)
-            error = cv2.norm(self.image_points_per_frame[i], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
-            mean_error += error
-        print("total error: {}".format(mean_error / len(objpoints)))"""
+        errors = []
+        for i in range(len(self.image_points_per_frame)):
+            calc, _ = cv2.projectPoints(self.object_points_per_frame[i], self.rvecs[i], self.tvecs[i], self.camera_matrix, self.distortion_coeffs)
+            calc = calc.reshape(-1, 2)
+            meas = self.image_points_per_frame[i]
+            errors += ((calc[:, 0] - meas[:, 0])**2 + (calc[:, 1] - meas[:, 1])**2).tolist()
+
+        return np.sqrt(np.mean(np.asarray(errors)))
 
     def print(self, lpad="\t"):
         p = self.get_parameters()
@@ -260,26 +264,18 @@ def create_asymmetric_grid_object_points(board_size: Tuple[int, int], dx: float,
     dy = 0.5*dx if dy is None else dy
     object_points = []
     for j in range(height):
-        n_features_this_row = width if j % 2 == 0 else width - 1
+        n_features_this_row = width #  if j % 2 == 0 else width - 1
         offset = 0 if j % 2 == 0 else 0.5*dx
         for i in range(n_features_this_row):
             object_points.append([offset + i * dx, j * dy, 0.0])
     return np.array(object_points)
 
-def find_circles_grid(img, board_size, use_larger_blobs=False, create_image=True, grid_type=cv2.CALIB_CB_SYMMETRIC_GRID):
+def find_circles_grid(img, board_size, create_image=True,
+                      grid_type=cv2.CALIB_CB_SYMMETRIC_GRID, blob_detector=None):
     if img.dtype != np.uint8:
         img = convert_to_8_bit(img)
-    if use_larger_blobs:
-        params = cv2.SimpleBlobDetector_Params()
-        params.maxArea = 1e5
-        blob_detector = cv2.SimpleBlobDetector_create(params)
-    else:
-        blob_detector = None
-    success, image_points = cv2.findCirclesGrid(img,board_size, grid_type, blobDetector=blob_detector)
-    if success is False and use_larger_blobs is False:
-        # as we didn't find it using the default arguments, try again with larger blob size
-        return find_circles_grid(img, board_size, use_larger_blobs=True, create_image=create_image, grid_type=grid_type)
 
+    success, image_points = cv2.findCirclesGrid(img,board_size, grid_type, blobDetector=blob_detector)
     overlayed_image = None
     if success and create_image:
         img_rgb = pycv.to_rgb(img)

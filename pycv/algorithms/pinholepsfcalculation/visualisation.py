@@ -1,7 +1,6 @@
 import matplotlib
 import numpy as np
 import pycv
-matplotlib.use('Qt5Agg')  # or
 import matplotlib.pyplot as plt
 from .optimisation import calculate_brightness
 from .psf import PSF
@@ -73,7 +72,8 @@ def display_error(x, y, pixel_vals, psf: PSF, background: InterpolatedImage, ape
     subsamples = qmc.Halton(d=2, scramble=True, rng=rng).random(n_subsamples)
     x_samples = np.zeros((x.shape[0], n_subsamples)) + x.reshape(-1, 1) + subsamples[:, 0]
     y_samples = np.zeros((y.shape[0], n_subsamples)) + y.reshape(-1, 1) + subsamples[:, 1]
-    brightness = calculate_brightness(x_samples, y_samples, psf, aperture_radius, aperture_brightness, background)
+    l_bkg = background(x_samples, y_samples)
+    brightness = calculate_brightness(x_samples, y_samples, psf, aperture_radius, aperture_brightness, l_bkg)
     brightness = np.mean(brightness, axis=-1)
 
     plt.scatter(x, brightness, label="Calculated")

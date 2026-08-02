@@ -103,6 +103,21 @@ def create_distortion_coeffs(k1, k2, k3, p1, p2, k4=0.0, k5=0.0, k6=0.0, mode="s
     else:
         return np.array([k1, k2, p1, p2, k3], dtype=np.float32)
 
+
+def scale_camera_matrix(camera_matrix, sx, sy=None):
+    if sy is None:
+        sy = sx
+
+    K = np.asarray(camera_matrix, dtype=np.float64).copy()
+    K[0, 0] *= sx  # fx
+    K[1, 1] *= sy  # fy
+    K[0, 2] *= sx  # cx
+    K[1, 2] *= sy  # cy
+    K[0, 1] *= sx  # skew
+
+    return K
+
+
 def project_points_to_2d(points: NDArray, camera_pos, camera_rotation, camera_matrix) -> NDArray:
     """
     Deproject a point in 3D space on to the 2D image_safe_zone plane, and calculate the coordinates of it
