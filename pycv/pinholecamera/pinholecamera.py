@@ -17,7 +17,7 @@ import math
 
 class PinholeCamera:
     def __init__(self, camera_matrix: NDArray, res: Tuple[int, int], distortion_coeffs: NDArray = np.zeros(5),
-                 p: NDArray = np.zeros(3), r: NDArray = np.eye(3)):
+                 p: NDArray = np.zeros(3), r: NDArray = np.eye(3), new_camera_matrix: NDArray = None):
         """
 
         :param camera_matrix:
@@ -27,6 +27,7 @@ class PinholeCamera:
         :param r:
         """
         self.camera_matrix = np.copy(camera_matrix)
+        self.new_camera_matrix = new_camera_matrix
         self.distortion_coeffs = np.copy(distortion_coeffs)
         self.xres, self.yres = res
         self.position = np.copy(p)
@@ -44,6 +45,15 @@ class PinholeCamera:
 
         self.xres = int(new_width)
         self.yres = int(new_height)
+
+        self.new_camera_matrix = scale_camera_matrix(self.new_camera_matrix, sx, sy) if self.new_camera_matrix is not None else None
+
+    def set_alpha(self, alpha):
+        if alpha is None:
+            self.new_camera_matrix = None
+            return
+        newcamera_matrix, roi = cv2.getOptimalNewCameraMatrix(self.camera_matrix, self.distortion_coeffs, self.res(), alpha)
+        self.new_camera_matrix = newcamera_matrix
 
 
     def projected_pixel_width_at_distance(self, distance):
@@ -98,8 +108,7 @@ class PinholeCamera:
         :param image:
         :return:
         """
-        image = cv2.undistort(image, self.camera_matrix, self.distortion_coeffs)
-        return image
+        return cv2.undistort(image, self.camera_matrix, self.distortion_coeffs, None, self.new_camera_matrix)
 
     def create_distortion_map(self, x: np.ndarray = None, y: np.ndarray = None):
         x = np.arange(self.xres) if x is None else x
@@ -198,6 +207,35 @@ class PinholeCamera:
     def hfov(self):
         return focal_length_to_fov(self.fx(), self.xres)
 
+    def compute_hfov(self):
+        """
+        Compute HFOV from the calibrated camera model.
+
+        Returns
+        -------
+        hfov_deg : float
+        """
+
+        cy = self.cy()
+
+        # Left and right edge pixels
+        edge_pixels = np.array([
+            [0, cy],
+            [self.res()[0] - 1, cy]
+        ])
+
+        # Convert pixels to rays
+        rays = self.deproject_to_3d_vector(edge_pixels)
+
+        # Angle between rays
+        cos_theta = np.clip(
+            np.dot(rays[0], rays[1]),
+            -1.0,
+            1.0
+        )
+
+        return np.degrees(np.arccos(cos_theta))
+
     def vfov(self):
         return focal_length_to_fov(self.fy(), self.yres)
 
@@ -244,25 +282,27 @@ class PinholeCamera:
         xx, yy = np.meshgrid(np.arange(self.xres), np.arange(self.yres))
         return xx, yy
 
-    def create_grid(self, distort=True, width=None):
-        if width is None:
-            width = self.xres // 10
-        x_pos = np.arange(width, self.xres - width//2 + 1, width)
-        y_pos = np.arange(width, self.yres - width//2 + 1, width)
+    def create_grid(self, mode="distort", n=7, boundary = 0):
+        x_pos = np.linspace(boundary, self.xres - boundary, n)
+        y_pos = np.linspace(boundary, self.yres - boundary, n)
         dst_x = []
         dst_y = []
         for x in x_pos:
-            y_arr = np.copy(y_pos)
+            y_arr = np.linspace(y_pos[0], y_pos[-1], self.yres*20)
             x_arr = np.full(y_arr.shape, fill_value=x)
-            if distort:
+            if mode == "distort":
                 x_arr, y_arr = unstack(self.distort_points(pycv.stack(x_arr, y_arr)))
+            elif mode == "undistort":
+                x_arr, y_arr = unstack(self.undistort_points(pycv.stack(x_arr, y_arr)))
             dst_x.append(x_arr)
             dst_y.append(y_arr)
         for y in y_pos:
-            x_arr = np.copy(x_pos)
+            x_arr = np.linspace(x_pos[0], x_pos[-1], self.xres*20)
             y_arr = np.full(x_arr.shape, fill_value=y)
-            if distort:
+            if mode == "distort":
                 x_arr, y_arr = unstack(self.distort_points(pycv.stack(x_arr, y_arr)))
+            elif mode == "undistort":
+                x_arr, y_arr = unstack(self.undistort_points(pycv.stack(x_arr, y_arr)))
             dst_x.append(x_arr)
             dst_y.append(y_arr)
         return dst_x, dst_y

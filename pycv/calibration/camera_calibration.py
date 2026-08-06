@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import math
 from dataclasses import dataclass
 from operator import truediv
 
@@ -11,7 +13,7 @@ import pickle
 import pycv
 from pycv.core import convert_to_8_bit, rms
 from pycv.constants import *
-from pycv.pinholecamera import PinholeCamera
+from pycv.pinholecamera import PinholeCamera, scale_camera_matrix
 from pycv.pinholecamera import unpack_camera_matrix, distortion_coefficients_to_dict
 import json
 import os
@@ -37,7 +39,7 @@ class CalibrationTarget:
                                                                               self.grid_height)
         elif board_type == CALIB_BOARD_TYPE_CIRCLE_GRID_ASYMMETRIC:
             self.grid_type = cv2.CALIB_CB_ASYMMETRIC_GRID
-            self.object_points: NDArray = create_asymmetric_grid_object_points(board_size, self.grid_width, self.grid_height)
+            self.object_points: NDArray = create_asymmetric_grid_object_points(board_size, self.grid_width)
         else:
             raise Exception("Unknown board type supplied")
 
@@ -56,6 +58,7 @@ class CameraCalibration:
     residual_errors_per_frame: Union[List[NDArray], None] = None
     image_keys: Union[List[Union[str, int]], None] = None
     camera_matrix: Union[NDArray, None] = None
+    new_camera_matrix: Union[NDArray, None] = None
     distortion_coeffs: Union[NDArray, None] = None
     rvecs: Union[List[NDArray]] = None
     tvecs: Union[List[NDArray]] = None
@@ -72,6 +75,24 @@ class CameraCalibration:
         self.target_positions = []
         self.target_rotations = []
         self.device_name = device_name
+
+    def rescale(self, sx, sy = None):
+        if sy is None:
+            sy = sx
+        self.camera_matrix = scale_camera_matrix(self.camera_matrix, sx, sy)
+        new_width = self.image_size[0] * sx
+        new_height = self.image_size[1] * sy
+
+        if not math.isclose(new_width, round(new_width)) or not math.isclose(new_height, round(new_height)):
+            raise Exception(f"New resolution does not scale to an integer - {self.image_size[0]}x{self.image_size[1]} to {new_width}x{new_height}")
+
+        self.image_size = (int(new_width), int(new_height))
+        for i in range(len(self.image_points_per_frame)):
+            self.image_points_per_frame[i][:, 0] *= sx
+            self.image_points_per_frame[i][:, 1] *= sy
+
+        self.new_camera_matrix = scale_camera_matrix(self.new_camera_matrix, sx, sy) if self.new_camera_matrix is not None else None
+
 
     def add_calibration_point(self, img: NDArray, target: CalibrationTarget, key: Union[str, int]=None,
                               detected_features=None, display=False, verbose=False, blob_detector=None):
@@ -119,8 +140,9 @@ class CameraCalibration:
         if init_camera_matrix is not None or init_distortion_coeffs is not None:
             calibration_flags |= cv2.CALIB_USE_INTRINSIC_GUESS
 
-        self.rms, self.camera_matrix, self.distortion_coeffs, rvecs, tvecs = cv2.calibrateCamera(self.object_points_per_frame,
-                                                                                         self.image_points_per_frame,
+        object_points_per_frame = [f.astype(np.float32) for f in self.object_points_per_frame]
+        image_points_per_frame = [f.astype(np.float32) for f in self.image_points_per_frame]
+        self.rms, self.camera_matrix, self.distortion_coeffs, rvecs, tvecs = cv2.calibrateCamera(object_points_per_frame, image_points_per_frame,
                                                                                          self.image_size, cameraMatrix=init_camera_matrix, distCoeffs=init_distortion_coeffs,
                                                                                          flags=calibration_flags)
 
@@ -132,19 +154,20 @@ class CameraCalibration:
             self.target_rotations.append(R)
             self.target_positions.append(t)
 
-        if alpha is not None:
-            newcamera_matrix, roi = cv2.getOptimalNewCameraMatrix(self.camera_matrix, self.distortion_coeffs,
-                                                                  self.image_size, alpha)
-            print(self.camera_matrix)
-            print("-----------------")
-            print(newcamera_matrix)
-            print(roi)
-            self.camera_matrix = newcamera_matrix
+        self.set_alpha(alpha)
 
         if verbose:
             self.print()
 
         return self.rms
+
+    def set_alpha(self, alpha):
+        if alpha is None:
+            self.new_camera_matrix = None
+            return
+        newcamera_matrix, roi = cv2.getOptimalNewCameraMatrix(self.camera_matrix, self.distortion_coeffs, self.image_size, alpha)
+        self.new_camera_matrix = newcamera_matrix
+
 
     def get_parameter(self, param):
         return self.get_parameters()[param]
@@ -170,7 +193,7 @@ class CameraCalibration:
             return return_type_if_missing
 
     def undistort_image(self, img: NDArray):
-        return cv2.undistort(img, self.camera_matrix, self.distortion_coeffs)
+        return cv2.undistort(img, self.camera_matrix, self.distortion_coeffs, None, self.new_camera_matrix)
 
     def compute_reprojection_error(self):
         errors = []
@@ -234,7 +257,7 @@ class CameraCalibration:
 
     def create_pinhole_camera(self, include_distortion=True) -> PinholeCamera:
         dist_coeffs = self.distortion_coeffs if include_distortion else np.zeros(5)
-        return PinholeCamera(self.camera_matrix, self.image_size, distortion_coeffs=dist_coeffs)
+        return PinholeCamera(self.camera_matrix, self.image_size, distortion_coeffs=dist_coeffs, new_camera_matrix=self.new_camera_matrix)
 
 def create_symmetric_grid_object_points(board_size: Tuple[int, int], dx: float, dy = None):
     """
@@ -252,7 +275,7 @@ def create_symmetric_grid_object_points(board_size: Tuple[int, int], dx: float, 
             object_points.append([i * dx, j * dy, 0.0])
     return np.array(object_points)
 
-def create_asymmetric_grid_object_points(board_size: Tuple[int, int], dx: float, dy = None):
+def create_asymmetric_grid_object_points(board_size: Tuple[int, int], dx: float):
     """
     Creates a grid calibration target
     :param board_size: a tuple of the form (width, height),
@@ -261,7 +284,7 @@ def create_asymmetric_grid_object_points(board_size: Tuple[int, int], dx: float,
     :return:
     """
     width, height = board_size
-    dy = 0.5*dx if dy is None else dy
+    dy = 0.5*dx
     object_points = []
     for j in range(height):
         n_features_this_row = width #  if j % 2 == 0 else width - 1

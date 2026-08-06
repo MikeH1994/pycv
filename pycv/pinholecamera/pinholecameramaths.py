@@ -347,65 +347,117 @@ def distort_points(points, camera_matrix, distortion_coeffs):
 
 
 def undistort_points(distorted_points, camera_matrix, distortion_coeffs,
-                           max_iter=20, eps=1e-12):
+                           max_iter=20, eps=1e-12, damping=0.5, max_radius2=1e8):
     """
-    Exact inverse of distort_points() using iterative Newton-style refinement.
-    Supports 5 or 8 distortion coefficients (Brown–Conrady model).
-    Returns pixel coordinates (same convention as distort_points).
+    inverse Brown-Conrady distortion model.
+
+    Parameters
+    ----------
+    distorted_points : (...,2)
+    camera_matrix : (3,3)
+    distortion_coeffs : (5,) or (8,)
+    max_iter : int
+    eps : float
+    damping : float
+        Update relaxation factor in (0,1].
+    max_radius2 : float
+        Prevent runaway r² values.
+
+    Returns
+    -------
+    undistorted_points : same shape as input
     """
-    init_shape = distorted_points.shape
-    distorted_points = distorted_points.reshape(-1, 2).astype(np.float64)
+
+    original_shape = distorted_points.shape
+    pts = distorted_points.reshape(-1, 2).astype(np.float64)
 
     fx = camera_matrix[0, 0]
     fy = camera_matrix[1, 1]
     cx = camera_matrix[0, 2]
     cy = camera_matrix[1, 2]
 
-    # unpack distortion coefficients
-    if len(distortion_coeffs) == 5:
-        k1, k2, p1, p2, k3 = distortion_coeffs.reshape(-1)
+    d = distortion_coeffs.reshape(-1)
+
+    if len(d) == 5:
+        k1, k2, p1, p2, k3 = d
         k4 = k5 = k6 = 0.0
+    elif len(d) >= 8:
+        k1, k2, p1, p2, k3, k4, k5, k6 = d[:8]
     else:
-        k1, k2, p1, p2, k3, k4, k5, k6 = distortion_coeffs.reshape(-1)
+        raise ValueError("Expected 5 or 8 distortion coefficients")
 
-    # Convert distorted pixels → normalized distorted coords
-    xd = (distorted_points[:, 0] - cx) / fx
-    yd = (distorted_points[:, 1] - cy) / fy
+    # distorted normalized coordinates
+    xd = (pts[:, 0] - cx) / fx
+    yd = (pts[:, 1] - cy) / fy
 
-    # Initial guess: assume no distortion
+    # initial guess
     x = xd.copy()
     y = yd.copy()
 
+    active = np.ones(len(x), dtype=bool)
+
     for _ in range(max_iter):
 
-        r2 = x * x + y * y
+        if not np.any(active):
+            break
+
+        xa = x[active]
+        ya = y[active]
+
+        r2 = xa * xa + ya * ya
+        r2 = np.minimum(r2, max_radius2)
+
         r4 = r2 * r2
         r6 = r4 * r2
 
-        radial = (1 + k1*r2 + k2*r4 + k3*r6) / (1 + k4*r2 + k5*r4 + k6*r6)
+        denom = 1.0 + k4*r2 + k5*r4 + k6*r6
 
-        x_tan = 2*p1*x*y + p2*(r2 + 2*x*x)
-        y_tan = p1*(r2 + 2*y*y) + 2*p2*x*y
+        # Avoid singularities
+        bad = np.abs(denom) < 1e-12
+        denom[bad] = np.sign(denom[bad]) * 1e-12
 
-        # forward-distorted estimate of (x,y)
-        x_est = x * radial + x_tan
-        y_est = y * radial + y_tan
+        radial = (
+            (1.0 + k1*r2 + k2*r4 + k3*r6)
+            / denom
+        )
 
-        # update using difference between predicted and actual distorted
-        dx = xd - x_est
-        dy = yd - y_est
+        x_tan = 2*p1*xa*ya + p2*(r2 + 2*xa*xa)
+        y_tan = p1*(r2 + 2*ya*ya) + 2*p2*xa*ya
 
-        x += dx
-        y += dy
+        x_est = xa * radial + x_tan
+        y_est = ya * radial + y_tan
 
-        if np.max(np.abs(dx)) < eps and np.max(np.abs(dy)) < eps:
-            break
+        dx = xd[active] - x_est
+        dy = yd[active] - y_est
 
-    # convert normalized → pixel units
-    undistorted = np.zeros_like(distorted_points)
-    undistorted[:, 0] = x * fx + cx
-    undistorted[:, 1] = y * fy + cy
-    return undistorted.reshape(init_shape)
+        xa_new = xa + damping * dx
+        ya_new = ya + damping * dy
+
+        finite = (
+            np.isfinite(xa_new) &
+            np.isfinite(ya_new)
+        )
+
+        x_idx = np.where(active)[0]
+
+        x[x_idx[finite]] = xa_new[finite]
+        y[x_idx[finite]] = ya_new[finite]
+
+        # mark diverged points inactive
+        active[x_idx[~finite]] = False
+
+        converged = (
+            (np.abs(dx) < eps) &
+            (np.abs(dy) < eps)
+        )
+
+        active[x_idx[converged]] = False
+
+    result = np.empty_like(pts)
+    result[:, 0] = x * fx + cx
+    result[:, 1] = y * fy + cy
+
+    return result.reshape(original_shape)
 
 
 

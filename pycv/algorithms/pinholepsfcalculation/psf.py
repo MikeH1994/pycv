@@ -58,14 +58,14 @@ class PSF:
             F2 = ncx2.cdf(a, df=2, nc=lam)
             F4 = ncx2.cdf(a, df=4, nc=lam)
             F_lambda = 0.5 * (F4 - F2)
-            p = ncx2.pdf(a, df=2, nc=lam)
+            f2 = ncx2.pdf(a, df=2, nc=lam)
 
             # partial derivative wrt radius, df / dr
-            gradients[0] += 4 * np.pi * k * r * p
+            gradients[0] += 4 * np.pi * k * r * f2
             # partial derivative wrt k_i
             gradients[2 + 4*i] = 2 * np.pi * sigma ** 2 * F2
             # partial derivative wrt sigma_i
-            gradients[2 + 4*i + 1] = 4 * np.pi * k * sigma * (F2 - a * p - lam * F_lambda)
+            gradients[2 + 4*i + 1] = 4 * np.pi * k * sigma * (F2 - a * f2 - lam * F_lambda)
             # x_i
             gradients[2 + 4*i + 2] = 4 * np.pi * k * (x + x0) * F_lambda
             # y_i
@@ -85,10 +85,10 @@ class PSF:
         gradients[1] = 0.0 # brightness- will calculate later
         for i in range(self.n_terms):
             k, sigma, _, _ = self.params[i]
-            gradients[2 + 4*i] = 2*np.pi*sigma**2
-            gradients[2 + 4*i + 1] = 4*k*np.pi*sigma
-            gradients[2 + 4*i + 2] = 0.0
-            gradients[2 + 4*i + 3] = 0.0
+            gradients[2 + 4*i] = 2*np.pi*sigma**2         # df / d k
+            gradients[2 + 4*i + 1] = 4*k*np.pi*sigma      # df / d sigma
+            gradients[2 + 4*i + 2] = 0.0                  # df / d delta_x
+            gradients[2 + 4*i + 3] = 0.0                  # df / d delta_y
         return gradients
 
 
