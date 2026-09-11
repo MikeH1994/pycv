@@ -3,16 +3,8 @@ import scipy
 from scipy.stats import ncx2
 
 class PSF:
-    def __init__(self, params, fix_position=False):
+    def __init__(self, params):
         assert(len(params.shape) == 1 and params.shape[0] %2 == 0)
-        if fix_position:
-            dst_params = []
-            for i in range(0, params.shape[0], 2):
-                dst_params.append(params[i])
-                dst_params.append(params[i+1])
-                dst_params.append(0.0)
-                dst_params.append(0.0)
-            params = np.array(dst_params)
         self.params = params.reshape(-1, 4)
         self.n_terms = self.params.shape[0]
 
@@ -90,26 +82,3 @@ class PSF:
             gradients[2 + 4*i + 2] = 0.0                  # df / d delta_x
             gradients[2 + 4*i + 3] = 0.0                  # df / d delta_y
         return gradients
-
-
-    def integral_over_infinity_numeric(self, n_samples=10000, width=100):
-        subsamples = np.linspace(-width, width, n_samples)
-        xx, yy = np.meshgrid(subsamples, subsamples)
-        f = self.f(xx, yy)
-        fx = scipy.integrate.simpson(f, subsamples, axis=1)
-        return scipy.integrate.simpson(fx, subsamples)
-
-    def integral_over_circle_numeric(self, x, y, r, n_samples=5000):
-        init_shape = x.shape
-        x = x.reshape(-1)
-        y.reshape(-1)
-        dst = np.zeros_like(x)
-        subsamples = np.linspace(-r, r, n_samples)
-        xx, yy = np.meshgrid(subsamples, subsamples)
-        mask = (xx * xx + yy * yy) <= r * r
-
-        for i in range(dst.shape[0]):
-            f = self.f(xx + x[i], yy + y[i]) * mask
-            fx = scipy.integrate.simpson(f, subsamples, axis=1)
-            dst[i] = scipy.integrate.simpson(fx, subsamples)
-        return dst.reshape(init_shape)

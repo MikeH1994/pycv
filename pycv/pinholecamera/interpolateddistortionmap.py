@@ -1,7 +1,7 @@
 import pycv
 from ..pinholecamera import invert_distortion_maps
 from ..core import stack, unstack
-from ..imageutils.interpolated_image import InterpolatedImage
+from ..imageutils.interpolatedimage import InterpolatedImage
 import numpy as np
 import scipy
 import scipy.interpolate

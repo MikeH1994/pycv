@@ -4,7 +4,7 @@ import os
 from matplotlib.image import AxesImage
 from matplotlib.lines import Line2D
 from matplotlib.collections import PathCollection
-
+from matplotlib.colors import Normalize
 
 
 def save_current_fig(fpath, verbose=False, dpi=120, tight_layout=True, size_inches=(8,6)):
@@ -99,3 +99,33 @@ def invert_x_axis():
 
 def invert_y_axis():
     pass
+
+def intensity_scatterplot_2d(x, y, vals, cmap='viridis', point_size=20):
+    norm = Normalize(vmin=np.min(vals), vmax=np.max(vals))
+    sc = plt.scatter(x, y, c=vals, s=point_size, cmap=cmap, norm=norm)
+    plt.axis("equal")
+
+def intensity_scatterplot(x, y, intensity, cmap='viridis', point_size=20, show=False):
+    norm = Normalize(vmin=np.min(intensity), vmax=np.max(intensity))
+    fig, ax = plt.subplots()
+
+    ax.scatter(
+        x, y,
+        c=intensity,
+        norm=norm,
+        cmap=cmap,
+        s = point_size
+    )
+
+    def format_coord(xmouse, ymouse):
+        # Find nearest point
+        d2 = (x - xmouse) ** 2 + (y - ymouse) ** 2
+        i = np.argmin(d2)
+
+        return (
+            f"x={xmouse:.3f}, y={ymouse:.3f}, "
+            f"val={intensity[i]:.3f}")
+
+    ax.format_coord = format_coord
+    if show:
+        plt.show()

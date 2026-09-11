@@ -1,2 +1,2 @@
-from .radiancemodel import RadianceModel
+from .radianceconverter import RadianceConverter
 from .emissivitycorrection import EmissivityCorrection

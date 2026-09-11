@@ -5,6 +5,7 @@ import numpy as np
 import pycv
 from tqdm.auto import tqdm
 import os
+from io import StringIO
 
 @dataclass
 class IRBISFilter:
@@ -29,6 +30,7 @@ class IRBISMetadata:
         self.folderpath = metadata.pop("Folderpath")
         self.width = metadata.pop("ImageWidth")
         self.height = metadata.pop("ImageHeight")
+        self.timestamp = metadata.pop("ms")
         self.calibration_name = metadata.pop("CalName")
         self.calibration_range = metadata.pop("CalibRange")
         self.integration_time = metadata.pop("IntegTime")
@@ -36,12 +38,18 @@ class IRBISMetadata:
         self.header_length = metadata.pop("HeaderLength")
         self.delimiter = metadata.pop("Delimiter")
         self.decimal = metadata.pop("Decimal")
-        self.metatada = metadata
+        self.top_left = (0, 0)
+        if "StartPos" in metadata:
+            start,end = metadata.pop("StartPos").split(self.delimiter)
+            start, end = int(start), int(end)
+            self.top_left =  start, end
+        self.metadata = metadata
 
     def settings_to_dict(self):
         return {
             "Folderpath": self.folderpath,
             "ImageWidth": self.width,
+            "Timestamp": self.timestamp,
             "ImageHeight": self.height,
             "CalName": self.calibration_name,
             "CalibRange": self.calibration_range,
@@ -99,19 +107,22 @@ class IRBISMetadata:
         for delimiter in [";", "\t", " ", ","]:
             tokens = line.split(delimiter)
 
-            if len(tokens) != expected_length and len(tokens) != expected_length + 1:
-                continue
+            for decimal_guess in [".", ","]:
 
-            decimal = None
-            for guess in [".", ","]:
-                if guess in tokens[0]:
+                if delimiter == decimal_guess:
+                    continue
+                success = True
+                for token in tokens:
+                    if token == "":
+                        continue
+                    token=token.replace(decimal_guess, ".")
                     try:
-                        float(tokens[0].replace(guess, "."))
-                        decimal = guess
-                        break
+                        float(token)
                     except ValueError:
-                        pass
-            return delimiter, decimal
+                        success = False
+                        break
+                if success:
+                    return delimiter, decimal_guess
         raise Exception(f"Could not find delimiter and decimal for line {line}")
     @staticmethod
     def collate(metadata: List[IRBISMetadata]):
@@ -123,14 +134,14 @@ class IRBISMetadata:
 
         # set initial lists for each element
         for m in metadata:
-            for key in m.metatada.keys():
+            for key in m.metadata.keys():
                 collated_metadata[key] = []
 
         # collate variables
         for metadata_i in metadata:
             for key in collated_metadata:
-                if key in metadata_i.metatada.keys():
-                    collated_metadata[key].append(metadata_i.metatada[key])
+                if key in metadata_i.metadata.keys():
+                    collated_metadata[key].append(metadata_i.metadata[key])
                 else:
                     collated_metadata[key].append(None)
 
@@ -143,6 +154,7 @@ class IRBISMetadata:
                 collated_metadata[key] = np.array(collated_metadata[key], dtype=np.float32)
         collated_metadata.update(settings)
         return IRBISMetadata(collated_metadata)
+
 
 class IRBISCSVImageStack:
     def __init__(self, image: np.ndarray, metadata: IRBISMetadata):
@@ -165,7 +177,34 @@ class IRBISCSVImageStack:
         return self.metadata.name()
 
     @staticmethod
-    def load(fpath) -> IRBISCSVImageStack:
+    def collate(image_list: List[IRBISCSVImage]) -> IRBISCSVImageStack:
+        metadata_list = [im.metadata for im in image_list]
+        image_stack = np.array([im.image for im in image_list], dtype=np.float32)
+        metadata = IRBISMetadata.collate(metadata_list)
+        return IRBISCSVImageStack(image_stack, metadata)
+
+class IRBISCSVImage:
+    def __init__(self, image: np.ndarray, metadata: IRBISMetadata):
+        self.image = image
+        self.metadata = metadata
+
+    def get_image(self, average=True):
+        return self.image if not average else np.mean(self.image, axis=0)
+
+    def get_metadata(self):
+        return self.metadata
+
+    def is_temp(self):
+        return self.metadata.temp_unit == "degC"
+
+    def key(self):
+        return self.metadata.key()
+
+    def name(self):
+        return self.metadata.name()
+
+    @staticmethod
+    def load(fpath, subframe=False) -> IRBISCSVImage:
         def converter_function(decimal):
             def parse(s):
                 if isinstance(s, bytes):
@@ -176,24 +215,27 @@ class IRBISCSVImageStack:
                 return float(s) if s else float('nan')
             return parse
         metadata = IRBISMetadata.load(fpath)
-
         if metadata.decimal != ".":
             conv = {i: converter_function(metadata.decimal) for i in range(metadata.width)}
         else:
             conv = None
-        img = np.genfromtxt(fpath, delimiter=metadata.delimiter, skip_header=metadata.header_length, converters=conv)
-        img = img[:metadata.height, :metadata.width]
-        return IRBISCSVImageStack(img, metadata)
 
-    @staticmethod
-    def collate(image_list: List[IRBISCSVImageStack]) -> IRBISCSVImageStack:
-        metadata_list = [im.metadata for im in image_list]
-        image_stack = np.array([im.image for im in image_list], dtype=np.float32)
-        metadata = IRBISMetadata.collate(metadata_list)
-        return IRBISCSVImageStack(image_stack, metadata)
+        if subframe:
+            with open(fpath, 'r') as f:
+                lines = f.readlines()[metadata.header_length:]
+                lines = [l.strip().strip(metadata.delimiter) for l in lines]
+                ss = StringIO(metadata.delimiter.join(lines))
+
+                img = np.genfromtxt(ss, delimiter=metadata.delimiter, converters=conv)
+                img = img.reshape(metadata.height, metadata.width)
+                return IRBISCSVImage(img, metadata)
+        else:
+            img = np.genfromtxt(fpath, delimiter=metadata.delimiter, skip_header=metadata.header_length, converters=conv)[:metadata.height, :metadata.width]
+            return IRBISCSVImage(img, metadata)
+
 
 class IRBISFolder:
-    def __init__(self, datasets: List[IRBISCSVImageStack]):
+    def __init__(self, datasets: List[IRBISCSVImage]):
         self.image_stacks = datasets
 
     def __len__(self):
@@ -214,7 +256,7 @@ class IRBISFolder:
                 files_in_folder = files_in_folder[: max_files_per_folder]
             subloader = tqdm(files_in_folder, disable=not show_progress_bar, desc=f"Loading folder {i+1}/{len(folders)}")
             for fpath in subloader:
-                img = IRBISCSVImageStack.load(fpath)
+                img = IRBISCSVImage.load(fpath)
                 if img.key() not in results:
                     results[img.key()] = []
                 results[img.key()].append(img)

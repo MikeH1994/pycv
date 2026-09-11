@@ -1,1 +1,1 @@
-from .csvreader import IRBISCSVImageStack, IRBISMetadata, IRBISFolder
+from .csvreader import IRBISCSVImage, IRBISMetadata, IRBISFolder, IRBISCSVImageStack

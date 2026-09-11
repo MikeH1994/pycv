@@ -117,6 +117,11 @@ def scale_camera_matrix(camera_matrix, sx, sy=None):
 
     return K
 
+def pad_camera_matrix(camera_matrix, pad_left, pad_top):
+    K = np.asarray(camera_matrix, dtype=np.float64).copy()
+    K[0, 2] += pad_left
+    K[1, 2] += pad_top
+    return K
 
 def project_points_to_2d(points: NDArray, camera_pos, camera_rotation, camera_matrix) -> NDArray:
     """

@@ -3,6 +3,8 @@ from typing import Union, List
 import cv2
 import numpy as np
 from numpy.typing import NDArray
+import matplotlib.pyplot as plt
+from scipy.ndimage import distance_transform_edt
 
 
 def write_avi(frames, output_path, fps=30):
@@ -147,3 +149,9 @@ def n_channels(img: NDArray):
     if len(img.shape) == 2:
         return 1
     return img.shape[-1]
+
+
+def fill_pixels_nearest(image, pixels_to_replace):
+    indices = distance_transform_edt(pixels_to_replace, return_distances=False, return_indices=True)
+    nearest_values = image[indices[0],indices[1]]
+    return nearest_values

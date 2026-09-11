@@ -2,7 +2,6 @@ import matplotlib
 import numpy as np
 import pycv
 import matplotlib.pyplot as plt
-from .optimisation import calculate_brightness
 from .psf import PSF
 from pycv.plt import plt_fig_to_rgb, set_colorbar, set_labels_and_legend
 from pycv import InterpolatedImage

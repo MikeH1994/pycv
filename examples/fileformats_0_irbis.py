@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from pycv.fileformats import IRBISFolder, IRBISCSVImageStack, IRBISMetadata
+from pycv.fileformats import IRBISFolder, IRBISCSVImage, IRBISMetadata
 import pycv
 from tqdm.auto import tqdm
 import os
