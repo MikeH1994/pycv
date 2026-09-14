@@ -1,6 +1,4 @@
 import cv2
-import numpy as np
-import os
 from pycv import InterpolatedImage, fill_pixels_nearest
 from pycv.radiometry import RadianceConverter
 from .geometry import fraction_of_square_in_circle
@@ -18,7 +16,6 @@ import scipy
 
 def get_radiance_model():
     return RadianceConverter(np.linspace(7000, 14000, 500))
-
 
 def create_background(bkg_image: np.ndarray, centre: Tuple[float, float], rad: RadianceConverter,
                       aperture_radius_px, roi_width: int=21, interpolate_over_aperture=True):
@@ -44,7 +41,6 @@ def create_background(bkg_image: np.ndarray, centre: Tuple[float, float], rad: R
         mask = cv2.dilate(mask, np.ones((3,3)))
         # replace these pixels with their nearest valid pixel
         roi = fill_pixels_nearest(roi.astype(np.float32), mask)
-
     return InterpolatedImage(roi, x, y)
 
 
@@ -53,34 +49,70 @@ def gaussian_2d(coords, x0, y0, A, sigma, B):
     r2 = (xx - x0)**2 + (yy - y0)**2
     return (A * np.exp(-r2 / (2 * sigma**2)) + B).reshape(-1)
 
-class FittingFunction:
-    def __init__(self, aperture_radius_px, background_image):
+class ApertureFitter:
+    def __init__(self, aperture_radius_px):
         self.aperture_radius_px = aperture_radius_px
-        self.background_image = background_image
 
-    def fn(self, coords, *params):
+    def fit(self, xx, yy, roi, mode):
+        initial_guess = (0.0, 0.0, np.max(roi) / (2*np.pi), 1.0, 0.0)
+        lower_bounds = [-2, -2, 0, 0.1, -np.inf]
+        upper_bounds= [2, 2, np.max(roi), 5.0, np.inf]
+
+        if mode == "erf":
+            fn = self.erf
+        elif mode == "erf_disk":
+            fn = self.erf_disk
+            initial_guess = (0.0, 0.0, np.max(roi), self.aperture_radius_px, 1.0, 0.0)
+            lower_bounds = [-2, -2, 0, 0.1, 0.1, -np.inf]
+            upper_bounds = [2, 2, np.max(roi), 5.0, 5.0, np.inf]
+        elif mode == "gaussian":
+            fn = self.gaussian
+        elif mode == "energy":
+            fn = self.energy
+            E0 = np.sum(np.clip(roi - np.median(roi), 0, None))
+            initial_guess = (0.0,0.0,E0,1.0,np.median(roi))
+            lower_bounds = [-5, -5, 0, 0.1, -np.inf]
+            upper_bounds = [5, 5, np.sum(roi), 5.0, np.inf]
+        else:
+            raise Exception(f"Invalid option {mode}")
+
+        popt, _ = curve_fit(fn, (xx, yy), roi, p0=initial_guess, bounds=(lower_bounds, upper_bounds), maxfev=5000)
+
+        dx, dy = popt[:2]
+        return dx, dy
+
+    def erf(self, coords, x0, y0, A, sigma, B):
         xx, yy = coords
-        x0, y0, k = params[:3]
-        param_pairs = [(params[i], params[i+1]) for i in range(3, len(params), 2)]
-
         dx = xx-x0
         dy = yy-y0
+        s = np.sqrt(2.0) * sigma
+        ex = (scipy.special.erf((dx + 0.5) / s) - scipy.special.erf((dx - 0.5) / s))
+        ey = (scipy.special.erf((dy + 0.5) / s) - scipy.special.erf((dy - 0.5) / s))
+        return A * (np.pi * sigma ** 2 / 2.0) * ex * ey + B
 
-        frac = fraction_of_square_in_circle(dx.flatten(), dy.flatten(),
-                                                  np.full(dx.size, self.aperture_radius_px)).reshape(xx.shape)
-        total = k #  + (1-frac) * self.background_image(dx, dy)
+    def erf_disk(self, coords, x0, y0, A, sigma, B):
+        R = self.aperture_radius_px
+        xx, yy = coords
+        r = np.sqrt((xx - x0) ** 2 + (yy - y0) ** 2)
+        return A * 0.5 * (1.0 - scipy.special.erf((r - R) / (np.sqrt(2.0) * sigma))) + B
 
-        for (A, sigma) in param_pairs:
-            s = np.sqrt(2.0) * sigma
-            ex = (scipy.special.erf((xx + 0.5 - x0) / s) - scipy.special.erf((xx - 0.5 - x0) / s))
-            ey = (scipy.special.erf((yy + 0.5 - y0) / s) - scipy.special.erf((yy - 0.5 - y0) / s))
-            A * (np.pi * sigma ** 2 / 2.0) * ex * ey
-        return total.reshape(-1)
 
+    def energy(self, coords, x0, y0, E, sigma, B):
+        xx, yy = coords
+        dx = xx-x0
+        dy = yy-y0
+        s = np.sqrt(2.0) * sigma
+        ex = (scipy.special.erf((dx + 0.5) / s) - scipy.special.erf((dx - 0.5) / s))
+        ey = (scipy.special.erf((dy + 0.5) / s) - scipy.special.erf((dy - 0.5) / s))
+        return (E * ex * ey) / 4.0 + B
+
+    def gaussian(self, coords, x0, y0, A, sigma, B):
+        xx, yy = coords
+        r2 = (xx - x0) ** 2 + (yy - y0) ** 2
+        return (A * np.exp(-r2 / (2 * sigma ** 2)) + B).reshape(-1)
 
 def find_aperture(image: np.ndarray, background_image, aperture_radius_px,
-                  radiance_model, mask=None, roi_width=11, apply_blur=True, blur_sigma=0.7, n_terms=3,
-                  max_iter=3):
+                  radiance_model, mask=None, roi_width=11, apply_blur=True, blur_sigma=0.7, mode="energy", max_iter=3):
     mask: np.ndarray = np.ones(image.shape[-2:], dtype=np.uint8) if mask is None else mask
 
     # Find approx location from the max value in the search region
@@ -128,6 +160,7 @@ def find_aperture(image: np.ndarray, background_image, aperture_radius_px,
             roi -= frac * background_image(dx, dy)
             # any pixel less than zero = 0
             roi = np.clip(roi, 0, None)
+        # roi /= np.max(roi)
 
         # Next, we fit a 2D gaussian to our ROI. The gaussian has an x and y offset term,
         # (dx and dy) which is effectively the correction that we need to make such that
@@ -135,17 +168,8 @@ def find_aperture(image: np.ndarray, background_image, aperture_radius_px,
         xx_local = xx - current_x
         yy_local = yy - current_y
 
-        initial_guess = [0.0, 0.0, 0.0]
-        bounds_lower = [-np.inf, -np.inf, 0.0]
-        bounds_upper = [np.inf, np.inf, np.inf]
-        for i in range(n_terms):
-            bounds_lower += [0, 1e-5]
-            bounds_upper += [np.inf, np.inf]
-            initial_guess += [1.0, 1.0]
-        func = FittingFunction(aperture_radius_px, background_image)
-        popt, _ = curve_fit(func.fn,(xx_local[mask_roi>0], yy_local[mask_roi>0]),
-                            roi[mask_roi>0], p0=initial_guess, bounds=(bounds_lower, bounds_upper))
-        dx_fit, dy_fit = popt[:2]
+        func = ApertureFitter(aperture_radius_px)
+        dx_fit, dy_fit = func.fit(xx_local[mask_roi > 0], yy_local[mask_roi > 0], roi[mask_roi>0], mode)
 
         current_x += dx_fit
         current_y += dy_fit

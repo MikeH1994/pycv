@@ -1,17 +1,17 @@
 import pickle
-
+import time
+from typing import List
+import matplotlib.pyplot as plt
 import numpy as np
-from tqdm import tqdm
 from scipy.optimize import minimize
 from scipy.stats import qmc
-from typing import Tuple
-import time
-import matplotlib.pyplot as plt
+from tqdm import tqdm
 from pycv import InterpolatedImage
-from pycv.plt import intensity_scatterplot, set_labels_and_legend, set_colorbar
+from pycv.plt import intensity_scatterplot, set_colorbar
 from pycv.radiometry import RadianceConverter
 from .psf import PSF
 from .utils import create_background, find_aperture, generate_pixel_data
+
 
 class PSFSolver:
     def __init__(self, data_scan, data_bkg_closed, data_bkg_open, rad,
@@ -105,11 +105,11 @@ class PSFSolver:
             self.runs_performed += 1
             print(f"Running iteration {self.runs_performed}")
             if self.background is None or update_background:
-                self._create_background(self.data_bkg_closed, self.data_bkg_open, self.aperture_radius,
-                                        mask=self.bkg_mask)
+                self.create_background()
             if self.pixels_x is None or self.pixels_y is None or self.pixels_radiance is None or update_scans:
-                self._create_scan_data(self.data_scan, self.aperture_radius, self.roi_width,
-                                       mask=self.scan_mask)
+                self.find_aperture_locations()
+                self.create_scan_data()
+
             if subsample_ratio > 0.0:
                 self.params, self.l_em = self._solve(subsample_ratio=subsample_ratio, samples_per_pixel=samples_per_pixel)
                 self.aperture_radius = self.params[0]
@@ -120,6 +120,16 @@ class PSFSolver:
             "aperture_radius": self.aperture_radius,
             "radiance_temperature": self.radiance_temperature
         }
+
+    def create_scan_data(self):
+        dst = self._create_scan_data(self.data_scan, self.aperture_locations, self.roi_width, mask=self.scan_mask)
+        self.pixels_x, self.pixels_y, self.pixels_radiance = dst
+    def create_background(self):
+        self.background = self._create_background(self.data_bkg_closed, self.data_bkg_open, self.aperture_radius,
+                                mask=self.bkg_mask)
+
+    def find_aperture_locations(self):
+        self.aperture_locations = self._find_aperture_locations(self.data_scan, self.aperture_radius, self.scan_mask)
 
     def check_motion_blur(self, timestamps_in_ms, integration_time_in_ms, verbose=True):
         assert(self.aperture_locations is not None)
@@ -171,6 +181,45 @@ class PSFSolver:
         if show:
             plt.show()
 
+    def set_3x3_parameters(self, w=0.3):
+        self.reinitialise(n_terms=9)
+        self.params = self._3x3_grid_parameter(w=w)
+
+    def _3x3_grid_parameter(self, w=0.3, sigma_0 = 0.5, sigma_i=1.0, k_0=1.0, k_i=0.1):
+        xi, yi = np.meshgrid([0.0, -w, w], [0.0, -w, w])
+
+        xi = xi.flatten()
+        yi = yi.flatten()
+        params = [self.aperture_radius, 1]
+
+        for i in range(xi.shape[0]):
+            sigma = sigma_0 if i ==0 else sigma_i
+            k = k_0 if i == 0 else k_i
+            x = xi[i]
+            y = yi[i]
+            params += [k, sigma, x, y]
+
+        return np.array(params)
+
+    def _normalise_params(self):
+        sigma = sigma_0 * k_sigma ** np.arange(self.n_terms)
+        amplitude = w / (2 * np.pi * sigma ** 2)
+
+
+    def display_line_plot(self, samples_per_pixel=100):
+        raise Exception("TODO")
+
+    def display_background(self, roi_width, show=True, in_temperature=True):
+        x = np.arange(-roi_width, roi_width+1)
+        y = np.arange(-roi_width, roi_width+1)
+        xx, yy = np.meshgrid(x, y)
+        img = self.background(xx, yy)
+        if in_temperature:
+            img = self.rad.to_temperature(img, in_celsius=True)
+        plt.imshow(img)
+        if show:
+            plt.show()
+
     def calc_brightness(self, x, y, samples_per_pixel, aperture_radius=None, l_em=None, bkg=None, psf=None):
         init_shape = x.shape
         x = x.reshape(-1)
@@ -198,23 +247,22 @@ class PSFSolver:
         with open(fpath, "rb") as f:
             return pickle.load(f)
 
-    def _create_scan_data(self, data: np.ndarray, aperture_radius_px, roi_width, mask=None):
+    def _find_aperture_locations(self, data: np.ndarray, aperture_radius_px, mask=None):
         assert(len(data.shape) == 3)
-        self.aperture_locations = []
+        aperture_locations = []
         pbar = tqdm(range(data.shape[0]))
         pbar.set_description("    Computing aperture locations... ")
         for i in pbar:
-            # blur seems to actually make localisation worse- disable
-            centre = find_aperture(data[i], self.background, aperture_radius_px, self.rad,
-                                   apply_blur=False, mask=mask)
-            self.aperture_locations.append(centre)
+            centre = find_aperture(data[i], self.background, aperture_radius_px, self.rad, apply_blur=False, mask=mask)
+            aperture_locations.append(centre)
         pbar.close()
-        time.sleep(0.01)
-        self.pixels_x, self.pixels_y, self.pixels_radiance = generate_pixel_data(data, self.aperture_locations,
-                                                                                 self.rad, roi_width,
-                                                                                 mask=mask)
+        return aperture_locations
 
-        return self.aperture_locations, self.pixels_x, self.pixels_y, self.pixels_radiance
+
+
+    def _create_scan_data(self, data: np.ndarray, aperture_locations, roi_width, mask=None):
+        pixels_x, pixels_y, pixels_radiance = generate_pixel_data(data, aperture_locations, self.rad, roi_width, mask=mask)
+        return pixels_x, pixels_y, pixels_radiance
 
     def _create_background(self, bkg_closed, bkg_open, aperture_radius: float,
                            mask=None, n_iterations=5, interpolate_over_aperture=True):
@@ -230,13 +278,16 @@ class PSFSolver:
                                            interpolate_over_aperture=interpolate_over_aperture)
         pbar.close()
         time.sleep(0.01)
-        self.background = background
-        return self.background
+        return background
+
+
 
     def _default_params(self, aperture_radius=1.0, k_sigma=1.5, k_w=0.75, sigma_0 = 0.7):
         if aperture_radius <= 0:
             aperture_radius = 0.1
+
         params = [aperture_radius, 1]
+
         x = [0.0] * self.n_terms
         y = [0.0] * self.n_terms
 
@@ -249,6 +300,18 @@ class PSFSolver:
         for i in range(self.n_terms):
             params += [amplitude[i], sigma[i], x[i], y[i]]
         return np.array(params)
+
+    def _create_parameter_mask(self, fix_sigma=False, fix_amplitude=False, fix_position=False):
+        param_mask = [True for _ in self.params]
+        for i in range(2, len(self.params), 4):
+            if fix_amplitude:
+                param_mask[i] = False
+            if fix_sigma:
+                param_mask[i+1] = False
+            if fix_position:
+                param_mask[i+2] = False
+                param_mask[i+3] = False
+        return param_mask
 
     def _calc_brightness(self, x, y, psf: PSF, aperture_radius, l_em, l_bkg):
         # The brightness seen on a point can be broken into 2 parts - the integral inside the aperture (D_ap)
@@ -271,8 +334,15 @@ class PSFSolver:
         return brightness, partial_derivatives
 
 
-    def _loss_fn(self, X, meas, x_samples, y_samples):
-        ap_radius, l_em, psf_params = X[0], X[1], X[2:]
+    def _loss_fn(self, X, meas, x_samples, y_samples, free_params: List[bool] | None = None):
+        # if we want to freeze certain parameters, we use a mask to define
+        # what is fixed.
+        if free_params is None:
+            free_params = [True for _ in self.params]
+        params = np.copy(self.params)
+        params[free_params] = X
+
+        ap_radius, l_em, psf_params = params[0], params[1], params[2:]
         l_bkg = self.background(x_samples, y_samples)
         psf = PSF(psf_params)
         brightness_samples, dfdtheta = self._calc_brightness(x_samples, y_samples, psf, ap_radius, l_em, l_bkg)
@@ -287,6 +357,8 @@ class PSFSolver:
         # average dfdtheta to n_parans, n
         dfdtheta = np.mean(dfdtheta, axis=-1)
         jacobian = np.mean((calc - meas) * dfdtheta, axis=-1)
+        # only return the jacobian for free parameters
+        jacobian = jacobian[free_params]
 
         if self.pbar is not None:
             if mae_temp < self.best_loss:
@@ -311,8 +383,18 @@ class PSFSolver:
         y_samples = np.zeros((*y.shape, n_subsamples)) + y.reshape(*y.shape, 1) + y_subsamples
         return x_samples, y_samples
 
-    def _solve(self, show_progress_bar: bool=True, samples_per_pixel: int=100, subsample_ratio=1.0):
+    def _constraint_fn(self, params):
+        psf = PSF(params[2:])
+        return psf.integral_over_infinity() - 1.0
+
+    def _constraint_jac(self, params):
+        psf = PSF(params[2:])
+        return psf.integral_over_infinity_derivative()
+
+    def _solve(self, show_progress_bar: bool=True, samples_per_pixel: int=100, subsample_ratio=1.0,
+               fix_sigma=False, fix_amplitude=False, fix_position=False):
         params = self.params
+        param_mask = self._create_parameter_mask(fix_sigma=fix_sigma, fix_amplitude=fix_amplitude, fix_position=fix_position)
         x_full = self.pixels_x.reshape(-1)
         y_full = self.pixels_y.reshape(-1)
         tgt_points_full = self.pixels_radiance.reshape(-1)
@@ -333,11 +415,12 @@ class PSFSolver:
         self.pbar.set_description(f"    Solving ({self.title} {x.shape[0]} points / {samples_per_pixel} subsamples)  MAE = N/A MAX = N/A")
         self.best_loss = np.inf
         result = minimize(self._loss_fn, params, args=(tgt_points, x_samples, y_samples),
-                          options=options, method="BFGS", jac=True)
+                          options=options, jac=True, method='trust-constr',
+                          constraints={'type': 'eq', 'fun': self._constraint_fn, 'jac': self._constraint_jac})
         params = result.x
         self.pbar.close()
         self.background.scale_image(self.k)
-        time.sleep(0.01)
+
         aperture_brightness = params[1]
         aperture_brightness *= self.k
         return params, aperture_brightness

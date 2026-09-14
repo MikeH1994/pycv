@@ -17,6 +17,9 @@ class PSF:
             total += k * np.exp(-d2 / (2 * sigma ** 2))
         return total
 
+    def normalise(self):
+        pass
+
     def integral_over_circle(self, x: np.ndarray, y: np.ndarray, r: float):
         total = np.zeros_like(x)
         for i in range(self.n_terms):
@@ -74,7 +77,7 @@ class PSF:
         # d/dk = 2*pi*sigma^2, d/dsigma = 4*k*pi*sigma; d/dxi = d/dyi = 0
 
         gradients[0] = 0.0 # aperture radius
-        gradients[1] = 0.0 # brightness- will calculate later
+        gradients[1] = 0.0 # brightness
         for i in range(self.n_terms):
             k, sigma, _, _ = self.params[i]
             gradients[2 + 4*i] = 2*np.pi*sigma**2         # df / d k
