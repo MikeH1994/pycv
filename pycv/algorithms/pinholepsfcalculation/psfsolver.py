@@ -10,7 +10,8 @@ from pycv import InterpolatedImage
 from pycv.plt import intensity_scatterplot, set_colorbar
 from pycv.radiometry import RadianceConverter
 from .psf import PSF
-from .utils import create_background, find_aperture, generate_pixel_data
+from .utils import create_background, generate_pixel_data
+from .localisation import ApertureLocator
 
 
 class PSFSolver:
@@ -100,7 +101,7 @@ class PSFSolver:
         self.runs_performed = 0
         self.best_loss = np.nan
 
-    def run(self, n_iterations=1, subsample_ratio=1, samples_per_pixel=100, update_background=True, update_scans=True):
+    def run(self, n_iterations=1, subsample_ratio=1, samples_per_pixel=100, update_background=True, update_scans=True, use_constraints=True):
         for i in range(n_iterations):
             self.runs_performed += 1
             print(f"Running iteration {self.runs_performed}")
@@ -111,7 +112,7 @@ class PSFSolver:
                 self.create_scan_data()
 
             if subsample_ratio > 0.0:
-                self.params, self.l_em = self._solve(subsample_ratio=subsample_ratio, samples_per_pixel=samples_per_pixel)
+                self.params, self.l_em = self._solve(subsample_ratio=subsample_ratio, samples_per_pixel=samples_per_pixel, use_constraints=use_constraints)
                 self.aperture_radius = self.params[0]
                 self.radiance_temperature = self.rad.to_temperature(self.l_em, in_celsius=True)
                 self.psf = PSF(self.params[2:])
@@ -201,11 +202,6 @@ class PSFSolver:
 
         return np.array(params)
 
-    def _normalise_params(self):
-        sigma = sigma_0 * k_sigma ** np.arange(self.n_terms)
-        amplitude = w / (2 * np.pi * sigma ** 2)
-
-
     def display_line_plot(self, samples_per_pixel=100):
         raise Exception("TODO")
 
@@ -249,16 +245,8 @@ class PSFSolver:
 
     def _find_aperture_locations(self, data: np.ndarray, aperture_radius_px, mask=None):
         assert(len(data.shape) == 3)
-        aperture_locations = []
-        pbar = tqdm(range(data.shape[0]))
-        pbar.set_description("    Computing aperture locations... ")
-        for i in pbar:
-            centre = find_aperture(data[i], self.background, aperture_radius_px, self.rad, apply_blur=False, mask=mask)
-            aperture_locations.append(centre)
-        pbar.close()
-        return aperture_locations
-
-
+        locator = ApertureLocator(self.background, self.rad)
+        return locator.find_apertures(data, aperture_radius_px, mask=mask,show_pbar=True)
 
     def _create_scan_data(self, data: np.ndarray, aperture_locations, roi_width, mask=None):
         pixels_x, pixels_y, pixels_radiance = generate_pixel_data(data, aperture_locations, self.rad, roi_width, mask=mask)
@@ -266,18 +254,15 @@ class PSFSolver:
 
     def _create_background(self, bkg_closed, bkg_open, aperture_radius: float,
                            mask=None, n_iterations=5, interpolate_over_aperture=True):
-
         background_open = np.mean(bkg_open.reshape(-1, *bkg_open.shape[-2:]), axis=0)
         background_closed = np.mean(bkg_closed.reshape(-1, *bkg_closed.shape[-2:]), axis=0)
         background = None
-        pbar = tqdm(range(n_iterations))
-        pbar.set_description("    Computing background... ")
-        for _ in pbar:
-            bkg_centre = find_aperture(background_open, background, aperture_radius, radiance_model=self.rad, mask=mask)
-            background = create_background(background_closed, bkg_centre, self.rad, self.aperture_radius,
+        locator = ApertureLocator(self.background, self.rad)
+        for _ in range(n_iterations):
+            dst = locator.find_aperture(background_open, aperture_radius, mask=mask)
+            cx, cy = dst["x0"], dst["y0"]
+            background = create_background(background_closed, (cx, cy), self.rad, aperture_radius,
                                            interpolate_over_aperture=interpolate_over_aperture)
-        pbar.close()
-        time.sleep(0.01)
         return background
 
 
@@ -392,7 +377,7 @@ class PSFSolver:
         return psf.integral_over_infinity_derivative()
 
     def _solve(self, show_progress_bar: bool=True, samples_per_pixel: int=100, subsample_ratio=1.0,
-               fix_sigma=False, fix_amplitude=False, fix_position=False):
+               fix_sigma=False, fix_amplitude=False, fix_position=False, use_constraints=False):
         params = self.params
         param_mask = self._create_parameter_mask(fix_sigma=fix_sigma, fix_amplitude=fix_amplitude, fix_position=fix_position)
         x_full = self.pixels_x.reshape(-1)
@@ -406,7 +391,6 @@ class PSFSolver:
         tgt_points = tgt_points_full[subsample_indices]
 
         x_samples, y_samples = self._create_subsamples(x, y, samples_per_pixel)
-        options = {"maxiter": 250}
 
         self.k = np.max(tgt_points).item()
         tgt_points /= self.k
@@ -414,9 +398,15 @@ class PSFSolver:
         self.pbar = tqdm(disable=not show_progress_bar)
         self.pbar.set_description(f"    Solving ({self.title} {x.shape[0]} points / {samples_per_pixel} subsamples)  MAE = N/A MAX = N/A")
         self.best_loss = np.inf
+
+        if use_constraints:
+            constraints={'type': 'eq', 'fun': self._constraint_fn, 'jac': self._constraint_jac}
+            method='trust-constr'
+        else:
+            constraints={}
+            method="BFGS"
         result = minimize(self._loss_fn, params, args=(tgt_points, x_samples, y_samples),
-                          options=options, jac=True, method='trust-constr',
-                          constraints={'type': 'eq', 'fun': self._constraint_fn, 'jac': self._constraint_jac})
+                          jac=True, method=method, constraints=constraints)
         params = result.x
         self.pbar.close()
         self.background.scale_image(self.k)

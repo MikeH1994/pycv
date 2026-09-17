@@ -1,7 +1,6 @@
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
-from .utils import gaussian_2d
 from pycv.maths import calculate_fwhm, find_intercepts
 
 def generate_initial_parameter_guess(pixels_x, pixels_y, pixels_radiance, aperture_radius, n_terms, slice_width = 0.02,

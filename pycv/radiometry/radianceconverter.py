@@ -76,7 +76,7 @@ class RadianceConverter:
         wavelengths = self.wavelengths if wavelengths is None else wavelengths
         return trapezoid(l_spectral, wavelengths)
 
-    def planck_function(self, temp: NDArray|float, wl: NDArray | None = None) -> NDArray:
+    def planck_function(self, temp: NDArray|float, wl_nm: NDArray | None = None) -> NDArray:
         """
         Compute the planck function, using the same form as the modified pbrt-v2.
 
@@ -86,30 +86,45 @@ class RadianceConverter:
             corresponding to each wavelength- e.g. a 2D temperature image with the shape (512, 640) would return an array with
             the shape (512, 640, n_wavelengths)
         :type temp: float | np.ndarray
-        :param wl: the sampled wavelengths, in nm. Shape: (n_wavelengths)
-        :type wl: np.ndarray
+        :param wl_nm: the sampled wavelengths, in nm. Shape: (n_wavelengths)
+        :type wl_nm: np.ndarray
         :param r: the spectral response at each wavelength. If not none, the output array will be multiplied by this before
             returning. Shape: (n_wavelegnths)
         :type r: np.ndarray, optional
         :return: a numpy array containing the blackbody spectral radiance at the given temperature(s)
         :rtype: np.ndarry
         """
-        wl = self.wavelengths if wl is None else wl
-        assert (len(wl.shape) == 1)
-        c2 = 1.4388E7
+        wl_nm = self.wavelengths if wl_nm is None else wl_nm
+        assert len(wl_nm.shape) == 1
         float_passed = False
-        n_wavelengths = wl.shape[0]
+        n_wavelengths = wl_nm.shape[0]
 
-        if isinstance(temp, float) or isinstance(temp, int):
+        if isinstance(temp, (int, float)):
             temp = np.array([temp])
             float_passed = True
 
         # reshape wavelengths so that it has the same number of dimensions as temp
-        wl = wl.reshape(*[1 for _ in range(len(temp.shape) - len(wl.shape))], n_wavelengths)
+        wl_nm = wl_nm.reshape(*[1 for _ in range(len(temp.shape) - len(wl_nm.shape))], n_wavelengths)
         # calculate radiance for each element in temp
         radiance = np.zeros((*temp.shape, n_wavelengths))
-        radiance[temp > 0] = 1E24 / (wl ** 5.0) / (np.exp(c2 / (wl * temp[temp > 0, None])) - 1.0)
-        radiance *= self.response_fn
+
+        c = 299792458.0
+        h = 6.62607015e-34
+        kb = 1.3806488e-23
+        wl_m = wl_nm * 1.0e-9
+
+        exponent = (h * c) / (wl_m * kb * temp[temp > 0, None])
+        # clip the exponent to avoid arithmetic overflow for low temperatures
+        # e^700 is roughly the max value before you overflow a 64-bit float
+        exp = np.exp(np.clip(exponent, None, 700))
+        k = (2 * h * c * c) / np.power(wl_m, 5)
+        radiance[temp > 0] = k * 1 / (exp - 1)
+
+        r = self.response_fn
+        if r is not None:
+            assert (len(r.shape) == 1 and r.shape[0] == n_wavelengths)
+            r = r.reshape(wl_nm.shape)
+            radiance *= r
 
         if float_passed:
             radiance = radiance.reshape(n_wavelengths)
