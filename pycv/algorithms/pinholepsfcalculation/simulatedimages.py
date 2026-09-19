@@ -14,8 +14,7 @@ class SimulatedImageGenerator:
                        tbkg_lower=10.0, tbkg_upper=40.0,
                        radius_lower=0.2, radius_upper=3.0,
                        bkg_gradient_lower = 0.1, bkg_gradient_upper = 0.5,
-                       bkg_gradient_delta=0.05,
-                       aperture_loc_delta=3.0):
+                       bkg_gradient_delta=0.05):
         self.image_size = image_size
         self.n_samples = n_samples
         self.rad_choices = [RadianceConverter(np.linspace(1000, 2000, 1000)),
@@ -32,7 +31,6 @@ class SimulatedImageGenerator:
         self.tbkg_upper = tbkg_upper
         self.radius_lower = radius_lower
         self.radius_upper = radius_upper
-        self.aperture_loc_delta = aperture_loc_delta
         self.bkg_gradient_lower = bkg_gradient_lower
         self.bkg_gradient_upper = bkg_gradient_upper
         self.bkg_gradient_delta = bkg_gradient_delta
@@ -101,8 +99,8 @@ class SimulatedImageGenerator:
             # basic settings
             rad = random.choice(self.rad_choices)
             aperture_radius = np.random.uniform(self.radius_lower, self.radius_upper)
-            aperture_location = self.get_aperture_loc(self.aperture_loc_delta)
-            bkg_aperture_loc = self.get_aperture_loc(0.5)
+            aperture_location = self.get_aperture_loc(1.0)
+            bkg_aperture_loc = self.get_aperture_loc(1.0)
             psf = self.create_psf()
             bkg = self.create_background(rad)
             t_bb = np.random.uniform(self.tbb_lower, self.tbb_upper)
