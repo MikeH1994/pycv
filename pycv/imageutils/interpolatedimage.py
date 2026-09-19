@@ -65,6 +65,12 @@ class InterpolatedImage:
                 ret = int(ret)
         return ret
 
+    def min(self):
+        return np.min(self.img)
+
+    def max(self):
+        return np.max(self.img)
+
     def coordinates_reflect(self, x, y):
         x = self._reflect_coordinate(x, np.min(self.x), np.max(self.x))
         y = self._reflect_coordinate(y, np.min(self.y), np.max(self.y))

@@ -30,6 +30,8 @@ class ApertureLocator:
             full_fn = self.erf
         elif mode == "gaussian":
             full_fn = self.gaussian
+        elif mode == "centroid":
+            pass
         else:
             raise ValueError(f"Invalid mode {mode}")
 
@@ -56,14 +58,7 @@ class ApertureLocator:
                     idx += 1
             return full_fn(coords, params["x0"], params["y0"], params["A"], params["B"], params["sigma"])
 
-        popt, _ = curve_fit(
-            wrapped,
-            (xx, yy),
-            roi,
-            p0=p0,
-            bounds=(lower, upper),
-            maxfev=5000
-        )
+        popt, _ = curve_fit(wrapped, (xx, yy), roi, p0=p0, bounds=(lower, upper), maxfev=5000)
         fitted_params = {}
         idx = 0
         for name in all_params:

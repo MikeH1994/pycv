@@ -4,3 +4,4 @@ from .psfsolver import PSFSolver
 from .psf import PSF
 from .visualisation import show_interpolated_image, show_video, create_simulated_image, display_error
 from .localisation import ApertureLocator
+from .simulatedimages import SimulatedImageGenerator

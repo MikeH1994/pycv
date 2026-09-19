@@ -4,7 +4,8 @@ from scipy.stats import ncx2
 
 class PSF:
     def __init__(self, params):
-        assert(len(params.shape) == 1 and params.shape[0] %2 == 0)
+        params = params.flatten()
+        assert(len(params.shape) == 1 and params.shape[0] %4 == 0)
         self.params = params.reshape(-1, 4)
         self.n_terms = self.params.shape[0]
 
